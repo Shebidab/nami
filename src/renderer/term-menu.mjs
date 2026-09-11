@@ -21,6 +21,8 @@
 
 // The label a copy row carries. Two, because "Copy link" on a file path reads
 // like it would copy a hyperlink, and "Copy path" on a url reads like a bug.
+import { kbd, REVEAL_IN } from './keys.mjs';
+
 function copyRow(kind, value) {
   return { label: kind === 'url' ? 'Copy link' : 'Copy path', copy: value };
 }
@@ -28,7 +30,7 @@ function copyRow(kind, value) {
 export function termMenuItems({ kind, text, st }) {
   if (kind === 'url') {
     return [
-      { label: 'Open in browser', kb: '⌘click' },
+      { label: 'Open in browser', kb: kbd('mod', 'click') },
       '-',
       // The text as printed, not urlTarget's normalised form: a bare www host
       // opens as https:// but must paste back as what was on screen.
@@ -52,15 +54,15 @@ export function termMenuItems({ kind, text, st }) {
   // nothing different.
   if (st.isDir) {
     return [
-      { label: 'Reveal in Finder', kb: '⌘click' },
+      { label: REVEAL_IN, kb: kbd('mod', 'click') },
       '-',
       copyRow(kind, st.abs || text),
     ];
   }
 
   return [
-    { label: 'Open', kb: '⌘click' },
-    { label: 'Reveal in Finder', kb: '⌥⌘click' },
+    { label: 'Open', kb: kbd('mod', 'click') },
+    { label: REVEAL_IN, kb: kbd('alt', 'mod', 'click') },
     '-',
     copyRow(kind, st.abs || text),
   ];

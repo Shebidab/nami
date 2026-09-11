@@ -1,14 +1,21 @@
-// Where a library item sits on the rail: this project vs this Mac, by type.
-// Pure — no DOM — so the grouping is tested without a window.
+// Where a library item sits on the rail: this project vs the whole machine, by
+// type. Pure — no DOM — so the grouping is tested without a window.
+//
+// The 'mac-' keys are internal and stay as they are: they are what shelfOf
+// returns, what the rail's DOM ids are built from, and what a saved desk
+// already holds. Only the labels are read by anyone, and those say whichever
+// machine this is.
+
+import { THIS_MACHINE } from './keys.mjs';
 
 export const SHELF_GROUPS = [
   { key: 'agents', label: 'Agents' },
   { key: 'skills', label: 'Skills' },
   { key: 'services', label: 'MCP' },
-  { key: 'mac-agents', label: 'Agents on this Mac', mac: true },
-  { key: 'mac-skills', label: 'Skills on this Mac', mac: true },
-  { key: 'mac-services', label: 'MCP on this Mac', mac: true },
-  { key: 'mac-commands', label: 'Commands on this Mac', mac: true },
+  { key: 'mac-agents', label: `Agents on ${THIS_MACHINE}`, mac: true },
+  { key: 'mac-skills', label: `Skills on ${THIS_MACHINE}`, mac: true },
+  { key: 'mac-services', label: `MCP on ${THIS_MACHINE}`, mac: true },
+  { key: 'mac-commands', label: `Commands on ${THIS_MACHINE}`, mac: true },
 ];
 
 export const CLI_ORDER = [

@@ -27,6 +27,7 @@ import { scanLinks, urlTarget } from './term-links.mjs';
 import { termMenuItems } from './term-menu.mjs';
 import { createLinkHint } from './link-hint.mjs';
 import { OPEN_OUTPUT_COPY, SHORTCUT_GROUPS } from './shortcuts.mjs';
+import { K, REVEAL_IN, FILE_MANAGER, SHORTCUTS_LABEL, MODIFIER_LEGEND, THIS_MACHINE, YOUR_MACHINE } from './keys.mjs';
 import { runBounds, leadingIndent, lastCol, rowPiece, MAX_JOINS } from './term-wrap.mjs';
 import { basesFromText, joinBase } from './path-bases.mjs';
 import { deskColumns, clampSpan, clampRows, MIN_COLS, GAP, ROW } from './desk-grid.mjs';
@@ -904,13 +905,13 @@ function buildShell() {
           <div class="live-badge" id="live-badge" style="display:none"><span class="dot"></span><span id="live-label"></span></div>
           <button class="btn btn-help" id="btn-help" title="Quick start"><span class="uni-i">?</span><span class="pix-i">${pixIcon('help')}</span></button>
           <div class="theme-zone" id="theme-zone"><button class="btn" id="btn-theme" title="Theme"><span class="uni-i">◐</span><span class="pix-i">${pixIcon('theme')}</span></button></div>
-          <button class="btn btn-set" id="btn-settings" title="Settings ⌘,"><span class="uni-i">⚙</span><span class="pix-i">${pixIcon('settings')}</span></button>
+          <button class="btn btn-set" id="btn-settings" title="Settings ${K.settings}"><span class="uni-i">⚙</span><span class="pix-i">${pixIcon('settings')}</span></button>
           <div class="viewsw" id="viewsw" role="group" aria-label="Workspace view" title="Desk: every card on a grid. Split: one session beside one of its files.">
             <button class="view-choice" data-view="desk">Desk</button>
             <button class="view-choice" data-view="split">Split</button>
           </div>
-          <button class="btn" id="btn-agents">Agents<span class="kb"> ⌘K</span></button>
-          <button class="btn btn--go" id="btn-new"><span class="uni-i">＋ </span><span class="pix-i">${pixIcon('plus')}</span>New<span class="kb2"> session</span><span class="kb"> ⌘N</span></button>
+          <button class="btn" id="btn-agents">Agents<span class="kb"> ${K.agents}</span></button>
+          <button class="btn btn--go" id="btn-new"><span class="uni-i">＋ </span><span class="pix-i">${pixIcon('plus')}</span>New<span class="kb2"> session</span><span class="kb"> ${K.newSession}</span></button>
         </div>
       </div>
       <div class="split">
@@ -928,8 +929,8 @@ function buildShell() {
           <div class="grid" id="grid"></div>
           <div id="update-root"></div>
           <div class="footer">
-            <span>⌘N new session</span><span>⌘K agents</span><span>⌘O folder</span>
-            <span>⌘W close pane</span><span>⌘S save</span><span class="path" id="footer-path"></span>
+            <span>${K.newSession} new session</span><span>${K.agents} agents</span><span>${K.openFolder} folder</span>
+            <span>${K.closePane} close pane</span><span>${K.save} save</span><span class="path" id="footer-path"></span>
             <button class="btn btn--small footer-shortcuts" id="btn-shortcuts">${helpIcon('shortcuts')} Shortcuts</button>
           </div>
         </div>
@@ -1170,8 +1171,8 @@ function toggleProjectsPop() {
     ? group('Pinned', pinned) + group('Recent', rest)
     : group('Recent folders', rest);
   pop.innerHTML = `${body || '<div class="rail-empty">No recent folders yet.</div>'}
-    <button class="project-open-other" id="open-other"><span class="plus">＋</span><span>Open another folder…</span><span class="kbd">⌘O</span></button>
-    <button class="project-open-other" id="open-newwin"><span class="plus">⧉</span><span>New window</span><span class="kbd">⇧⌘N</span></button>`;
+    <button class="project-open-other" id="open-other"><span class="plus">＋</span><span>Open another folder…</span><span class="kbd">${K.openFolder}</span></button>
+    <button class="project-open-other" id="open-newwin"><span class="plus">⧉</span><span>New window</span><span class="kbd">${K.newWindow}</span></button>`;
   // fixed + measured + parked on body, not absolute-in-topbar: the topbar clips
   // its descendants (overflow backstop for ⌘+ zoom), and renderHeader() rebuilds
   // topbar-center's innerHTML, which would silently eat the pop.
@@ -1267,7 +1268,7 @@ function refreshSessionsRail(c) {
   head.innerHTML = `<span class="title">Sessions</span>${S.panels.length ? '<span class="action" id="clear-all">close finished</span>' : ''}`;
   c.appendChild(head);
   const cl = q('#clear-all', head); if (cl) cl.onclick = closeFinished;
-  if (!S.panels.length) { const e = document.createElement('div'); e.className = 'rail-empty'; e.textContent = 'No sessions yet. Press ⌘N, or type a message below.'; c.appendChild(e); return; }
+  if (!S.panels.length) { const e = document.createElement('div'); e.className = 'rail-empty'; e.textContent = `No sessions yet. Press ${K.newSession}, or type a message below.`; c.appendChild(e); return; }
   // Sessions first, each with the files that joined it folded under it; files
   // with no live session last, under "Desk" (desk-view.mjs). In split the
   // highlight follows the two panes, on the desk the card you last clicked.
@@ -1328,7 +1329,7 @@ function refreshSessionsRail(c) {
 function refreshWorkspaceRail(c) {
   const p = S.project;
   const wrap = document.createElement('div'); wrap.className = 'tree';
-  if (!p) { wrap.innerHTML = '<div class="rail-empty">Open a folder (⌘O) to browse and edit files.</div>'; c.appendChild(wrap); return; }
+  if (!p) { wrap.innerHTML = `<div class="rail-empty">Open a folder (${K.openFolder}) to browse and edit files.</div>`; c.appendChild(wrap); return; }
   const head = document.createElement('div'); head.className = 'tree-path';
   const pathSpan = document.createElement('span'); pathSpan.className = 'path'; pathSpan.textContent = p.pathShort;
   const toggle = document.createElement('span'); toggle.className = 'action';
@@ -1361,7 +1362,7 @@ function refreshWorkspaceRail(c) {
   head.oncontextmenu = (e) => {
     e.preventDefault();
     showMenu(e.clientX, e.clientY, [
-      { label: 'Reveal in Finder', run: () => api.revealFile(p.path) },
+      { label: REVEAL_IN, run: () => api.revealFile(p.path) },
       { label: 'New file…', run: () => openFsName('file', p.path) },
       { label: 'New folder…', run: () => openFsName('folder', p.path) },
     ]);
@@ -1761,7 +1762,7 @@ function treeMenu(n, parentDir) {
     if (n.kind === 'dir') api.newWindow(n.path);
     else api.newWindow(parentDir || root, n.path);
   } });
-  items.push({ label: 'Reveal in Finder', run: () => api.revealFile(n.path) });
+  items.push({ label: REVEAL_IN, run: () => api.revealFile(n.path) });
   if (n.kind === 'dir') {
     items.push({ label: 'New file…', run: () => openFsName('file', n.path) });
     items.push({ label: 'New folder…', run: () => openFsName('folder', n.path) });
@@ -1785,7 +1786,7 @@ function treeMenu(n, parentDir) {
   // Direct to Trash: right-click plus a click below a separator is deliberate,
   // and the Trash is recoverable. The library card's Delete keeps its armed
   // second click because it sits next to Save.
-  items.push({ label: 'Move to Trash', danger: true, kb: '⌘⌫', run: () => trashTreeItem(n.path, parentDir) });
+  items.push({ label: 'Move to Trash', danger: true, kb: K.trash, run: () => trashTreeItem(n.path, parentDir) });
   return items;
 }
 
@@ -1948,7 +1949,7 @@ function availabilityTag(i) {
 // Short on purpose: the tag sits beside the item's name in a 282px rail, and
 // the name is what you are actually scanning for. Longer wording lives on the
 // detail sheets, where there is room for it.
-function scopeTagText(scope) { return scope === 'project' ? 'project' : 'your Mac'; }
+function scopeTagText(scope) { return scope === 'project' ? 'project' : YOUR_MACHINE; }
 
 // ---- pointer status: silent when healthy -----------------------------------
 // If every skill is announced there is nothing to say, and a line that always
@@ -2043,7 +2044,7 @@ function appendServiceRow(sect, sv) {
   row.innerHTML = `${chipHtml({ key: iconKeyFor(sv.id) || 'mcp', code: (cat && cat.code) || 'SV', kind: 'service' })}
     <span class="col"><span class="name">${esc(sv.name)}</span>
     <span class="tools">${serviceCovLine(sv)}</span></span>
-    ${missing.length ? '<button class="btn sv-tell">tell them</button>' : `<span class="scope-tag">${sv.scopes && sv.scopes.includes('project') ? 'project' : 'this Mac'}</span>`}`;
+    ${missing.length ? '<button class="btn sv-tell">tell them</button>' : `<span class="scope-tag">${sv.scopes && sv.scopes.includes('project') ? 'project' : THIS_MACHINE}</span>`}`;
   row.onclick = () => openServiceDetails(sv);
   const tell = row.querySelector('.sv-tell');
   if (tell) tell.onclick = async (e) => {
@@ -2208,8 +2209,8 @@ function emptyDeskHtml() {
   const first = !S.recents.length;
   const make = `<button class="btn ${first ? 'btn--go ' : ''}lane-cta" id="lane-make">＋ Make me a folder</button>`;
   const open = first
-    ? `<button class="btn lane-cta" id="lane-open">Choose an existing one<span class="kb"> ⌘O</span></button>`
-    : `<button class="btn btn--go lane-cta" id="lane-open">＋ Open a folder<span class="kb"> ⌘O</span></button>`;
+    ? `<button class="btn lane-cta" id="lane-open">Choose an existing one<span class="kb"> ${K.openFolder}</span></button>`
+    : `<button class="btn btn--go lane-cta" id="lane-open">＋ Open a folder<span class="kb"> ${K.openFolder}</span></button>`;
   return `<div class="lane-empty"><div class="polaroid">no folder</div>
       <div><div class="big">Open a folder to start working</div>
       <div class="hint">Every session runs inside a folder. That is what keeps it resumable.</div>
@@ -2244,7 +2245,7 @@ function renderGrid() {
       ? `<div class="lane-empty"><div class="polaroid">nothing open</div>
       <div><div class="big">Start a session</div>
       <div class="hint">Agents, terminals and harnesses. They all run in this folder.</div>
-      <button class="btn btn--go lane-cta" id="lane-new">＋ New session<span class="kb"> ⌘N</span></button></div></div>`
+      <button class="btn btn--go lane-cta" id="lane-new">＋ New session<span class="kb"> ${K.newSession}</span></button></div></div>`
       : emptyDeskHtml();
     const make = q('#lane-make', els.grid); if (make) make.onclick = makeFolderDialog;
     const tour = q('#lane-tour', els.grid); if (tour) tour.onclick = openQuickStart;
@@ -2341,7 +2342,7 @@ function renderSplit() {
     }
   };
   const sess = S.split.sessionId ? S.panels.find((x) => x.id === S.split.sessionId) : null;
-  place(q('.pane-agent', pv), S.split.sessionId, 'No session — ⌘N starts one');
+  place(q('.pane-agent', pv), S.split.sessionId, `No session — ${K.newSession} starts one`);
   place(q('.pane-files', pv), S.split.fileId, sess ? `No files with ${sess.title} yet — open one from the Workspace tab` : 'Open a file from the Workspace tab');
 }
 function syncSplitLayout(pv) {
@@ -2642,7 +2643,7 @@ function spawnTerminalTwin(p, draft) {
   } else if (a && a.bin) {
     spawned = startPanel({ kind: 'run', title: p.title || a.name, code: code2(a.name), command: a.bin, cwd: p.cwd, acpSid: p.acpSid, cont: !!p.acpSid, seed });
   } else {
-    toast('Open it from ⌘N — new session, pick the agent.');
+    toast(`Open it from ${K.newSession} — new session, pick the agent.`);
     return;
   }
   if (spawned) closePanel(p.id);
@@ -2908,7 +2909,7 @@ function wireFileSelection(p, rec) {
   const update = () => {
     rec.selection = captureFileSelection(p, rec);
     bar.hidden = !rec.selection;
-    if (rec.selection) button.textContent = (rec.selection.startLine ? `${rec.selection.endLine - rec.selection.startLine + 1} lines selected · ` : 'Selection · ') + 'Add to session… ⇧⌘↵';
+    if (rec.selection) button.textContent = (rec.selection.startLine ? `${rec.selection.endLine - rec.selection.startLine + 1} lines selected · ` : 'Selection · ') + `Add to session… ${K.addToSession}`;
   };
   rec.body.addEventListener('mouseup', update);
   rec.body.addEventListener('keyup', update);
@@ -3394,7 +3395,7 @@ function wireTerminalMenu(p, rec) {
       if (it.copy != null) return { ...it, run: () => copyLinkText(it.copy) };
       // Reveal is the alt route openTermLink already understands; naming it
       // here keeps the menu and the modifier on one implementation.
-      return { ...it, run: () => openTermLink(hit.link, hit.st, { altKey: it.label === 'Reveal in Finder' }) };
+      return { ...it, run: () => openTermLink(hit.link, hit.st, { altKey: it.label === REVEAL_IN }) };
     });
     if (hit.link.kind === 'url') items.unshift({ label: 'Open in Nami browser', run: () => { browsers.open(urlTarget(hit.link.text), null, p.id); setView('split'); } });
     showMenu(e.clientX, e.clientY, items);
@@ -3567,7 +3568,7 @@ function mountEditor(p, rec) {
     ${rich ? `<div class="ed-rich"><div class="ed-fm"></div><div class="ed-rich-doc"><div class="ed-rich-loading">Open Edit to load the block editor.</div></div></div>` : ''}
     <div class="ed-pane"><div class="ed-gutter"></div>
       <div class="ed-stack"><pre class="ed-hl" aria-hidden="true"></pre><pre class="ed-measure" aria-hidden="true"></pre><textarea class="ed-area" spellcheck="false"></textarea></div></div>
-    <div class="ed-bar"><span class="ed-path">${esc(shortHome(p.filePath))}</span>${html && !rec.peek ? '<button class="btn ed-browser"></button>' : ''}<button class="btn ed-finder">Finder</button><button class="btn btn--go ed-save">Save ⌘S</button></div>`;
+    <div class="ed-bar"><span class="ed-path">${esc(shortHome(p.filePath))}</span>${html && !rec.peek ? '<button class="btn ed-browser"></button>' : ''}<button class="btn ed-finder">${FILE_MANAGER}</button><button class="btn btn--go ed-save">Save ${K.save}</button></div>`;
   wrap.classList.toggle('editor--md', md);
   wrap.classList.toggle('editor--rich', rich);
   wrap.classList.toggle('editor--html', html);
@@ -3944,7 +3945,7 @@ function mountEditor(p, rec) {
     };
   });
   const edPath = q('.ed-path', wrap);
-  if (edPath) { edPath.title = 'Reveal in Finder'; edPath.onclick = () => api.revealFile(p.filePath); }
+  if (edPath) { edPath.title = REVEAL_IN; edPath.onclick = () => api.revealFile(p.filePath); }
   bindBrowserButton(q('.ed-browser', wrap), p);
   q('.ed-finder', wrap).onclick = () => api.revealFile(p.filePath);
   q('.ed-save', wrap).onclick = () => saveEditor(p);
@@ -3973,7 +3974,7 @@ function mountViewer(p, rec) {
   const fallback = `<div class="vw-stage vw-stage--pad"><div class="vw-glyph">▣</div>
       <div class="vw-name">${esc(p.title)}</div>
       <div class="vw-note">${esc(p.note || "Can't preview this file here.")}</div>
-      <button class="btn vw-reveal">Reveal in Finder</button></div>`;
+      <button class="btn vw-reveal">${REVEAL_IN}</button></div>`;
   if (p.sub === 'image') wrap.innerHTML = `<div class="vw-stage"><img src="${esc(url)}" alt="${esc(p.title)}" /></div>`;
   else if (p.sub === 'video') wrap.innerHTML = `<div class="vw-stage vw-stage--dark"><video src="${esc(url)}" controls playsinline></video></div>`;
   else if (p.sub === 'audio') wrap.innerHTML = `<div class="vw-stage vw-stage--pad"><div class="vw-glyph">♪</div><div class="vw-name">${esc(p.title)}</div><audio src="${esc(url)}" controls></audio></div>`;
@@ -3985,9 +3986,9 @@ function mountViewer(p, rec) {
   else if (p.sub === 'html') wrap.innerHTML = `<iframe class="vw-pdf vw-html" sandbox="allow-scripts allow-same-origin" src="${esc(docUrl(p.filePath))}"></iframe>`;
   else wrap.innerHTML = fallback;
   wrap.insertAdjacentHTML('beforeend',
-    `<div class="ed-bar"><span class="ed-path">${esc(shortHome(p.filePath))}</span><button class="btn vw-finder">Finder</button></div>`);
+    `<div class="ed-bar"><span class="ed-path">${esc(shortHome(p.filePath))}</span><button class="btn vw-finder">${FILE_MANAGER}</button></div>`);
   rec.body.appendChild(wrap);
-  wrap.querySelectorAll('.vw-reveal, .vw-finder, .ed-path').forEach((b) => { b.onclick = () => api.revealFile(p.filePath); if (b.classList.contains('ed-path')) b.title = 'Reveal in Finder'; });
+  wrap.querySelectorAll('.vw-reveal, .vw-finder, .ed-path').forEach((b) => { b.onclick = () => api.revealFile(p.filePath); if (b.classList.contains('ed-path')) b.title = REVEAL_IN; });
   // A rewritten PNG keeps its cached bitmap forever otherwise: the src is the
   // same URL, so nothing re-fetches and the tile shows yesterday's image. The
   // counter is the whole mechanism. A viewer has no buffer and nothing unsaved,
@@ -4091,13 +4092,13 @@ function mountCard(p, rec) {
     <div class="card-links"></div>
     <div class="ed-bar">
       <span class="ed-path">${esc(shortHome(p.filePath))}</span>
-      <button class="btn card-finder">Finder</button>
+      <button class="btn card-finder">${FILE_MANAGER}</button>
       ${p.item.type === 'agent' && p.item.platform === 'claude' ? '<button class="btn card-use">Use</button>' : ''}
       ${canAdopt(p.item) ? '<button class="btn btn--go card-adopt">Make it everyone’s</button>' : ''}
       ${useHereLabel(p.item) ? `<button class="btn btn--go card-dup">${esc(useHereLabel(p.item))}</button>` : ''}
       ${p.item.broken ? '<button class="btn btn--go card-del">Remove this dead link</button>'
         : ro ? ''
-        : '<button class="btn card-del">Delete</button><button class="btn card-improve">Improve with my agent</button><button class="btn btn--go card-save">Save ⌘S</button>'}
+        : `<button class="btn card-del">Delete</button><button class="btn card-improve">Improve with my agent</button><button class="btn btn--go card-save">Save ${K.save}</button>`}
     </div>`;
   rec.body.appendChild(wrap);
   const formEl = q('.card-form', wrap), rawEl = q('.card-raw', wrap), rawTa = q('.raw-area', wrap), bodyTa = q('.card-body', wrap);
@@ -4146,7 +4147,7 @@ function mountCard(p, rec) {
   } else linksEl.style.display = 'none';
 
   const cardPath = q('.ed-path', wrap);
-  if (cardPath) { cardPath.title = 'Reveal in Finder'; cardPath.onclick = () => api.revealFile(p.filePath); }
+  if (cardPath) { cardPath.title = REVEAL_IN; cardPath.onclick = () => api.revealFile(p.filePath); }
   const cardFinder = q('.card-finder', wrap);
   if (cardFinder) cardFinder.onclick = () => api.revealFile(p.filePath);
   const useBtn = q('.card-use', wrap);
@@ -4799,7 +4800,7 @@ function renderLauncher() {
 
   if (!S.agents) {
     const row = document.createElement('div'); row.className = 'picker-row';
-    row.innerHTML = `<span class="col"><span class="desc">looking for agents on this Mac…</span></span>`;
+    row.innerHTML = `<span class="col"><span class="desc">looking for agents on ${THIS_MACHINE}…</span></span>`;
     list.appendChild(row);
   }
   for (const a of ready) {
@@ -4864,7 +4865,7 @@ function renderLauncher() {
   // add section: every not-yet-installed agent from the curated registry
   if (missing.length) {
     const div = document.createElement('div'); div.className = 'picker-divider';
-    div.textContent = 'add an agent to this Mac'; list.appendChild(div);
+    div.textContent = `add an agent to ${THIS_MACHINE}`; list.appendChild(div);
     const grid = document.createElement('div'); grid.className = 'add-grid'; list.appendChild(grid);
     for (const a of missing) {
       const card = document.createElement('div'); card.className = 'add-card'; card.tabIndex = 0;
@@ -4940,7 +4941,7 @@ function renderAgentInstalled(a) {
       <span class="desc"><span class="ok${st && st.signedIn === false ? ' ok--warn' : ''}">●</span> ${line}</span></span></div>
 
     <div class="scan-box ag-scan">
-      <div class="label">this Mac${st && st.source ? `<span class="scan-src">${esc(st.source)}</span>` : ''}</div>
+      <div class="label">${THIS_MACHINE}${st && st.source ? `<span class="scan-src">${esc(st.source)}</span>` : ''}</div>
       ${scan}
       <div class="scan-row"><span class="mark">✓</span><span class="label2">Program</span><span class="value">${esc(a.pathShort || a.path || 'installed')}</span></div>
     </div>
@@ -4955,7 +4956,7 @@ function renderAgentInstalled(a) {
       <span class="action" id="ag-docs">Read the guide</span>
     </div>
     <div class="ag-danger">
-      <button class="btn btn--ghost" id="ag-remove">Remove from this Mac</button>
+      <button class="btn btn--ghost" id="ag-remove">Remove from ${THIS_MACHINE}</button>
       <span class="why">Asks first, and names every file it would delete.</span>
     </div>`);
 
@@ -5016,7 +5017,7 @@ function renderAgentRemove() {
     : plan.mode === 'none'
       ? `<p class="setup-copy">${esc(plan.reason)}</p>`
       : `<div class="warn-box">
-           <div class="wb-head">This ${plan.mode === 'uninstall' ? 'runs' : 'deletes, on this Mac'}:</div>
+           <div class="wb-head">This ${plan.mode === 'uninstall' ? 'runs' : `deletes, on ${THIS_MACHINE}`}:</div>
            <ul>${(plan.describe || []).map((d) => `<li>${esc(d)}</li>`).join('')}</ul>
          </div>
          <p class="setup-copy">Your projects and files are untouched. You can install ${esc(a.name)} again later,
@@ -5050,7 +5051,7 @@ function renderAgentInstall(a) {
     <div class="setup-head"><button class="t-btn su-back" title="Back to new session">←</button>
       ${chipHtml({ key: iconKeyFor(a.id), code: code2(a.name), kind: 'agent' })}
       <span class="col"><span class="name">${esc(a.name)}</span><span class="desc">${esc(a.sub)}</span></span></div>
-    <p class="setup-copy">${esc(a.name)} is not on this Mac yet. One command installs it, and I can run that
+    <p class="setup-copy">${esc(a.name)} is not on ${THIS_MACHINE} yet. One command installs it, and I can run that
       for you in a terminal right here. The first time it starts, it will ask you to sign in, right in the tile.</p>
     <div class="setup-cmd">${esc(a.install)}</div>
     <div class="setup-actions">
@@ -5131,7 +5132,7 @@ async function finishAgentInstall(p, code) {
   refreshTileHead(p); refreshRail();
 
   if (!ok) {
-    setTileNote(p, `<span class="tn-tx"><b>${esc(name)} is still not on this Mac.</b>
+    setTileNote(p, `<span class="tn-tx"><b>${esc(name)} is still not on ${THIS_MACHINE}.</b>
       ${code === 0 ? 'The command ran to the end but left nothing Nami can find — the output above should say why.'
         : `The install exited with <b>${esc(String(code))}</b>.`}</span>
       <span class="tn-bt"><button class="btn btn--small" id="tn-docs">Read the guide</button>
@@ -5146,7 +5147,7 @@ async function finishAgentInstall(p, code) {
   const a = agent();
   S.justAdded = a.id;
   const signedOut = !(S.agentStatus[a.id] && S.agentStatus[a.id].signedIn);
-  setTileNote(p, `<span class="tn-tx"><b>${esc(a.name)} is on this Mac.</b>
+  setTileNote(p, `<span class="tn-tx"><b>${esc(a.name)} is on ${THIS_MACHINE}.</b>
     ${signedOut ? 'Signed out — your first session signs you in.' : 'Signed in and ready.'}</span>
     <span class="tn-bt"><button class="btn btn--go btn--small" id="tn-go">Back to New session</button></span>`, 'ok');
   const t = tileEls.get(p.id); if (!t) return;
@@ -5303,7 +5304,7 @@ function launchAgent(item, toolId) {
 }
 async function reallyLaunchAgent(item, toolId) {
   const worker = toolById(toolId);
-  if (!worker || !worker.found) { toast(`${toolNameOf(toolId)} is not on this Mac.`); return; }
+  if (!worker || !worker.found) { toast(`${toolNameOf(toolId)} is not on ${THIS_MACHINE}.`); return; }
   rememberTool(item, toolId);
   const was = await ensureDelivered(item, toolId);
   // How the session becomes the agent comes from the launch table, which knows
@@ -5555,7 +5556,7 @@ function renderCreateStep3(o) {
     ${knowsLine(o.kind) ? `<div class="ni-where ni-knows">${knowsLine(o.kind)}</div>` : ''}
     <div class="ni-agent" style="margin:10px 18px 0">${worker
       ? `a new session with <select class="agent-pick" id="ni-agent-sel">${agentOptionsHtml(worker.id)}</select> builds it with you`
-      : 'No agent is installed yet. Press ⌘N to add one first.'}</div>
+      : `No agent is installed yet. Press ${K.newSession} to add one first.`}</div>
     <div class="ni-row ni-actions"><button class="btn btn--go" id="ni-create" ${worker ? '' : 'disabled'}>Build it with my agent</button>
       <span class="action" id="ni-blank" role="button" tabindex="0">write it myself</span></div>`, { top: true });
   const nameInput = q('#ni-name', modal), descInput = q('#ni-desc', modal);
@@ -5570,7 +5571,7 @@ function renderCreateStep3(o) {
     keep();
     const w = chosenAgent(o);
     if (!o.desc.trim()) { toast('Describe what it should do first.'); return; }
-    if (!w) { toast('No agent is installed yet. Press ⌘N to add one first.'); return; }
+    if (!w) { toast(`No agent is installed yet. Press ${K.newSession} to add one first.`); return; }
     if (!S.project) { toast(`Open a folder first — ${skill ? 'skills' : 'agents'} live in the project.`); return; }
     const seed = buildCreateSeed({ type: o.kind, platform: o.platform, scope: o.scope, name: o.name, desc: o.desc, projectPath: S.project && S.project.path });
     closeOverlay();
@@ -5630,7 +5631,7 @@ function renderImproveItem() {
     <input class="text-input" id="imp-ask" placeholder="what should change? e.g. give it a real description and sharper instructions" spellcheck="false" />
     <div class="ni-agent">${worker
       ? `a new session with <select class="agent-pick" id="imp-agent">${agentOptionsHtml(worker.id)}</select> edits it for you`
-      : 'No agent is installed yet. Press ⌘N to add one first.'}</div>
+      : `No agent is installed yet. Press ${K.newSession} to add one first.`}</div>
     <div class="setup-actions" style="margin-top:12px"><button class="btn btn--go" id="imp-go" ${worker ? '' : 'disabled'}>Go</button></div>`);
   const input = q('#imp-ask', modal); input.value = o.text; setTimeout(() => input.focus(), 30);
   input.oninput = () => { o.text = input.value; };
@@ -5742,7 +5743,7 @@ function renderSettings() {
           : sec.id === 'look' ? lookPaneHtml()
             : sec.id === 'browser' ? browsers.settingsHtml() : sec.id === 'usage' ? usagePaneHtml() : sec.id === 'about' ? aboutPaneHtml() : sec.id === 'shortcuts' ? shortcutsPaneHtml() : keysPaneHtml()}</div>
     </div></div>
-    <div class="modal-foot">${sec.id === 'voice' ? voiceFootHtml() : sec.id === 'shortcuts' ? '<span class="note">⌘ Command · ⌥ Option · ⇧ Shift</span><button class="shortcuts-link" id="shortcuts-guide">Full guide ↗</button>' : '<span class="note">Saved on this Mac only, nothing syncs.</span>'}
+    <div class="modal-foot">${sec.id === 'voice' ? voiceFootHtml() : sec.id === 'shortcuts' ? `<span class="note">${MODIFIER_LEGEND}</span><button class="shortcuts-link" id="shortcuts-guide">Full guide ↗</button>` : `<span class="note">Saved on ${THIS_MACHINE} only, nothing syncs.</span>`}
       <button class="btn btn--go" id="set-done">Done</button></div>`);
 
   modal.querySelectorAll('.set-nav .rail-tab').forEach((b) => {
@@ -6392,7 +6393,7 @@ function renderConnectForm() {
     ${guided
       ? `<p class="setup-copy">${esc(svc.guide)}</p><div class="ni-agent">${chosenAgent(o)
           ? `a new session with <select class="agent-pick" id="sv-agent">${agentOptionsHtml(o.workerId)}</select> walks you through it`
-          : 'No agent is installed yet. Press ⌘N to add one first.'}</div>`
+          : `No agent is installed yet. Press ${K.newSession} to add one first.`}</div>`
       : folder
         ? `<p class="setup-copy">Pick the one folder your agents may read and edit. Nothing outside it is reachable.</p><button class="btn" id="sv-pick-folder">Choose a folder…</button><div class="setup-note" id="sv-folder-note">${esc(o.values.folder ? shortHome(o.values.folder) : '')}</div>`
         : `<p class="setup-copy">${esc(svc.name)} gives you one key so your agents can get in. Paste it here. It stays on your Mac.</p>${keyRows}`}
@@ -6503,7 +6504,7 @@ function renderConnectCustom() {
     <input class="text-input" id="svc-desc" placeholder="our internal wiki at wiki.acme.dev, read-only is fine" spellcheck="false" />
     <div class="ni-agent">${worker
       ? `a new session with <select class="agent-pick" id="svc-agent">${agentOptionsHtml(worker.id)}</select> builds it for you`
-      : 'No agent is installed yet. Press ⌘N to add one first.'}</div>
+      : `No agent is installed yet. Press ${K.newSession} to add one first.`}</div>
     <div class="setup-actions" style="margin-top:12px"><button class="btn btn--go" id="svc-go" ${worker ? '' : 'disabled'}>Go</button></div>
     <p class="setup-note">Watch it work, talk to it if you want. It appears under MCP in the Library when it lands.</p>`);
   const agentSel = q('#svc-agent', modal);
@@ -6526,7 +6527,7 @@ function renderConnectCustom() {
 }
 function startGuidedSetup(svc, worker) {
   worker = worker || bestAgent();
-  if (!worker) { toast('No agent is installed yet. Press ⌘N to add one first.'); return; }
+  if (!worker) { toast(`No agent is installed yet. Press ${K.newSession} to add one first.`); return; }
   closeOverlay();
   agentSession(worker, { title: 'set up ' + svc.name, code: svc.code, seed:
     `Walk me through connecting ${svc.name} step by step (${svc.docs}). Do every step you can yourself, ask me only when a browser sign-in needs me, and when it works register it for this project.` });
@@ -6572,9 +6573,9 @@ function quickStartRows() {
     },
     {
       n: 2, title: 'Press New session and pick who runs it',
-      sub: 'The list shows what is on your Mac. Anything missing installs from the same list.',
+      sub: `The list shows what is on ${YOUR_MACHINE}. Anything missing installs from the same list.`,
       acts: [
-        { label: 'New session ⌘N', go: true, run: () => { closeOverlay(); openLauncher(); } },
+        { label: `New session ${K.newSession}`, go: true, run: () => { closeOverlay(); openLauncher(); } },
         { label: '▶ Watch · 2 min', play: 'getting-started' },
       ],
     },
@@ -6599,7 +6600,7 @@ function quickStartRows() {
     {
       n: 6, title: 'Open what your agent makes',
       sub: OPEN_OUTPUT_COPY,
-      acts: [{ label: '⌘ Shortcuts & gestures', run: () => openSettings('shortcuts') }],
+      acts: [{ label: SHORTCUTS_LABEL, run: () => openSettings('shortcuts') }],
     },
   ];
 }

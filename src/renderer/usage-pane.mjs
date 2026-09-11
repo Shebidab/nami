@@ -1,3 +1,5 @@
+import { THIS_MACHINE } from './keys.mjs';
+
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const validPercent = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100;
 const validTime = (n) => Number.isFinite(n) && !Number.isNaN(new Date(n).valueOf());
@@ -82,7 +84,7 @@ function unavailableBlock(rows) {
 
 export function usageContent(result = {}) {
   const { groups, unavailable } = groupUsage(result.accounts);
-  return `<div class="usage-tools"><p class="bs-note">Allowance from CLIs installed on this Mac.</p><button class="btn btn--small" id="usage-refresh">Refresh</button></div>
+  return `<div class="usage-tools"><p class="bs-note">Allowance from CLIs installed on ${THIS_MACHINE}.</p><button class="btn btn--small" id="usage-refresh">Refresh</button></div>
     ${groups.map(cardHtml).join('')}
     ${unavailableBlock(unavailable)}
     ${!groups.length && !unavailable.length ? '<p class="bs-note">No coding CLI is installed yet.</p>' : ''}`;

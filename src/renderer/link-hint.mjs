@@ -1,10 +1,12 @@
 // Instructions only: never place terminal output, URLs, or local paths in the
 // tooltip. The existing link resolver remains responsible for what can open.
+import { MOD_CLICK, ALT_MOD_CLICK, REVEAL_LOWER } from './keys.mjs';
+
 export function linkHintText({ kind, st }) {
-  if (kind === 'url') return ['⌘ Click to open in browser', 'Right-click for more options'];
+  if (kind === 'url') return [`${MOD_CLICK} to open in browser`, 'Right-click for more options'];
   if (!st || !st.exists) return null;
-  if (st.isDir) return ['⌘ Click to reveal in Finder', 'Right-click for more options'];
-  if (st.isFile) return ['⌘ Click to open file', '⌥⌘ Click to reveal in Finder', 'Right-click for more options'];
+  if (st.isDir) return [`${MOD_CLICK} to ${REVEAL_LOWER}`, 'Right-click for more options'];
+  if (st.isFile) return [`${MOD_CLICK} to open file`, `${ALT_MOD_CLICK} to ${REVEAL_LOWER}`, 'Right-click for more options'];
   return null;
 }
 

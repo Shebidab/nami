@@ -1,18 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { termMenuItems } from '../src/renderer/term-menu.mjs';
+import { kbd, REVEAL_IN } from '../src/renderer/keys.mjs';
 
 const labels = (items) => items.filter((i) => i !== '-').map((i) => i.label);
 const copyRows = (items) => items.filter((i) => i !== '-' && i.copy != null);
 
 test('a file offers open, reveal and copy', () => {
   const items = termMenuItems({ kind: 'path', text: 'src/app.js', st: { exists: true, isFile: true, abs: '/w/src/app.js' } });
-  assert.deepEqual(labels(items), ['Open', 'Reveal in Finder', 'Copy path']);
+  assert.deepEqual(labels(items), ['Open', REVEAL_IN, 'Copy path']);
 });
 
 test('a directory does not offer Open — ⌘click reveals it, and so does this', () => {
   const items = termMenuItems({ kind: 'path', text: 'src', st: { exists: true, isDir: true, abs: '/w/src' } });
-  assert.deepEqual(labels(items), ['Reveal in Finder', 'Copy path']);
+  assert.deepEqual(labels(items), [REVEAL_IN, 'Copy path']);
 });
 
 test('a url opens in the browser and copies as a link', () => {
@@ -76,9 +77,9 @@ test('there is a separator, and it never leads or trails', () => {
 test('the shortcuts advertised are the ones that exist', () => {
   const file = termMenuItems({ kind: 'path', text: 'a.js', st: { exists: true, isFile: true, abs: '/w/a.js' } });
   const byLabel = (l) => file.find((i) => i !== '-' && i.label === l);
-  assert.equal(byLabel('Open').kb, '⌘click');
-  assert.equal(byLabel('Reveal in Finder').kb, '⌥⌘click');
+  assert.equal(byLabel('Open').kb, kbd('mod', 'click'));
+  assert.equal(byLabel(REVEAL_IN).kb, kbd('alt', 'mod', 'click'));
   const dir = termMenuItems({ kind: 'path', text: 'a', st: { exists: true, isDir: true, abs: '/w/a' } });
   // A directory has no alt route — ⌘click already reveals it.
-  assert.equal(dir.find((i) => i !== '-' && i.label === 'Reveal in Finder').kb, '⌘click');
+  assert.equal(dir.find((i) => i !== '-' && i.label === REVEAL_IN).kb, kbd('mod', 'click'));
 });

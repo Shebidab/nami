@@ -120,7 +120,11 @@ if (SHOT_PATH) {
 // Nami-dev otherwise restore each other's desks into every screenshot. Review
 // flags default to a disposable profile. An explicit --user-data must also be
 // disposable for review: it is used as supplied and is never deleted by Nami.
-const { createReviewProfile } = require('./review-profile');
+const { createReviewProfile, sweepOldProfiles } = require('./review-profile');
+// Anything a previous review run could not delete. Cheap, and it runs before a
+// window exists, so a temp folder full of dead Electron profiles never becomes
+// something the user has to find out about.
+try { sweepOldProfiles(); } catch (_) {}
 const reviewProfile = createReviewProfile({
   argv: process.argv, normalPath: app.getPath('userData'), packaged: app.isPackaged,
   reviewBuild: require('../../package.json').name === 'nami-review',

@@ -3,6 +3,8 @@
 // Gmail/Drive session. Nami Browser is not a catalog entry and is never
 // written to connections.json from here.
 
+import { K, THIS_MACHINE, YOUR_MACHINE } from './keys.mjs';
+
 import { knowsCopy } from './receivers.mjs';
 
 export const CONNECT_OVERLAYS = new Set([
@@ -168,7 +170,7 @@ export function createMcpSetup(deps) {
     ${svcKnowsLine() ? `<div class="setup-note">${svcKnowsLine()}</div>` : ''}
     <div class="chip-row" id="own-scope" style="margin:8px 0">
       <span class="pick-chip${o.scope === 'project' ? ' picked' : ''}" data-v="project">this project</span>
-      <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">this Mac</span></div>
+      <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">${THIS_MACHINE}</span></div>
     <div class="setup-actions">
       <button class="btn btn--go" id="own-go">Connect</button>
       ${b ? '<button class="btn" id="own-clear">Different bundle</button>' : '<button class="btn" id="own-bundle">Choose a bundle…</button>'}</div>`);
@@ -223,17 +225,17 @@ export function createMcpSetup(deps) {
     ${guided
       ? `<p class="setup-copy">${esc(svc.guide)}</p><div class="ni-agent">${chosenAgent(o)
           ? `a new session with <select class="agent-pick" id="sv-agent">${agentOptionsHtml(o.workerId)}</select> walks you through it`
-          : 'No agent is installed yet. Press ⌘N to add one first.'}</div>`
+          : `No agent is installed yet. Press ${K.newSession} to add one first.`}</div>`
       : folder
         ? `<p class="setup-copy">Pick the one folder your agents may read and edit. Nothing outside it is reachable.</p><button class="btn" id="sv-pick-folder">Choose a folder…</button><div class="setup-note" id="sv-folder-note">${esc(o.values.folder ? shortHome(o.values.folder) : '')}</div>`
-        : `<p class="setup-copy">${esc(svc.name)} gives you one key so your agents can get in. Paste it here. It stays on your Mac.</p>${keyRows}`}
+        : `<p class="setup-copy">${esc(svc.name)} gives you one key so your agents can get in. Paste it here. It stays on ${YOUR_MACHINE}.</p>${keyRows}`}
     ${svcKnowsLine() ? `<div class="setup-note">${svcKnowsLine()}</div>` : ''}
     <details class="sv-fold"${o.foldOpen ? ' open' : ''}><summary>choices (fine as they are)</summary>
       <div class="sv-fold-body">
         <div class="sv-lab">works in</div>
         <div class="chip-row" id="sv-scope">
           <span class="pick-chip${o.scope === 'project' ? ' picked' : ''}" data-v="project">this project</span>
-          <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">this Mac</span></div>
+          <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">${THIS_MACHINE}</span></div>
       </div></details>
     <div class="setup-actions">
       <button class="btn btn--go" id="sv-connect">${guided ? 'Set it up with my agent' : 'Connect'}</button>
@@ -293,7 +295,7 @@ export function createMcpSetup(deps) {
     const modal = overlay('setup-box', `
     <div class="setup-head"><span class="code" data-kind="service">${esc((cat && cat.code) || 'SV')}</span>
       <span class="col"><span class="name">${esc(sv.name)}</span>
-      <span class="desc"><span class="ok">●</span> connected · ${esc(sv.platforms.join(' + '))} · ${esc(sv.scopes.map((s) => s === 'project' ? 'this project' : 'your Mac').join(', '))}</span></span></div>
+      <span class="desc"><span class="ok">●</span> connected · ${esc(sv.platforms.join(' + '))} · ${esc(sv.scopes.map((s) => s === 'project' ? 'this project' : YOUR_MACHINE).join(', '))}</span></span></div>
     <div class="setup-actions">
       <button class="btn" id="sv-disc">Disconnect</button>
       <button class="btn btn--go" id="sv-ok">Done</button></div>`);
@@ -313,7 +315,7 @@ export function createMcpSetup(deps) {
     <input class="text-input" id="svc-desc" placeholder="our internal wiki at wiki.acme.dev, read-only is fine" spellcheck="false" />
     <div class="ni-agent">${worker
       ? `a new session with <select class="agent-pick" id="svc-agent">${agentOptionsHtml(worker.id)}</select> builds it for you`
-      : 'No agent is installed yet. Press ⌘N to add one first.'}</div>
+      : `No agent is installed yet. Press ${K.newSession} to add one first.`}</div>
     <div class="setup-actions" style="margin-top:12px"><button class="btn btn--go" id="svc-go" ${worker ? '' : 'disabled'}>Go</button></div>
     <p class="setup-note">Watch it work, talk to it if you want. It appears under MCP in the Library when it lands.</p>`);
     const agentSel = q('#svc-agent', modal);
@@ -332,7 +334,7 @@ export function createMcpSetup(deps) {
 
   function startGuidedSetup(svc, worker) {
     worker = worker || bestAgent();
-    if (!worker) { toast('No agent is installed yet. Press ⌘N to add one first.'); return; }
+    if (!worker) { toast(`No agent is installed yet. Press ${K.newSession} to add one first.`); return; }
     closeOverlay();
     const onExit = state.project ? deliverOnExit : undefined;
     agentSession(worker, { title: 'set up ' + svc.name, code: svc.code, seed: guidedSetupSeed(svc), onExit });

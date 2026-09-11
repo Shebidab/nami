@@ -1,14 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { linkHintText, createLinkHint } from '../src/renderer/link-hint.mjs';
+import { MOD_CLICK, REVEAL_LOWER } from '../src/renderer/keys.mjs';
 
 test('hints only promise actions available for the resolved target', () => {
   assert.equal(linkHintText({ kind: 'path' }), null);
   assert.equal(linkHintText({ kind: 'path', st: { exists: false } }), null);
   assert.equal(linkHintText({ kind: 'path', st: { exists: true } }), null);
-  assert.equal(linkHintText({ kind: 'url' })[0], '⌘ Click to open in browser');
-  assert.equal(linkHintText({ kind: 'path', st: { exists: true, isFile: true } })[0], '⌘ Click to open file');
-  assert.equal(linkHintText({ kind: 'path', st: { exists: true, isDir: true } })[0], '⌘ Click to reveal in Finder');
+  assert.equal(linkHintText({ kind: 'url' })[0], `${MOD_CLICK} to open in browser`);
+  assert.equal(linkHintText({ kind: 'path', st: { exists: true, isFile: true } })[0], `${MOD_CLICK} to open file`);
+  assert.equal(linkHintText({ kind: 'path', st: { exists: true, isDir: true } })[0], `${MOD_CLICK} to ${REVEAL_LOWER}`);
 });
 
 function fixture() {
@@ -67,7 +68,7 @@ test('a hint displays instructions only, never the path or URL', () => {
   f.hint.show({ kind: 'url', text: 'untrusted <img onerror="bad()">' }, { clientX: 100, clientY: 100 }, 'first');
   f.flush();
   const text = f.nodes[0].children.map((child) => child.textContent).join(' ');
-  assert.equal(text, '⌘ Click to open in browser Right-click for more options');
+  assert.equal(text, `${MOD_CLICK} to open in browser Right-click for more options`);
   assert.ok(!text.includes('untrusted'));
 });
 
