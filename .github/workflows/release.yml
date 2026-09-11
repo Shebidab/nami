@@ -35,7 +35,16 @@ on:
 
 jobs:
   # ---- macOS ---------------------------------------------------------------
+  #
+  # Skipped entirely in a fork that has no Apple credentials, which is this one.
+  # The alternative — leaving it to run and fail — makes every tag push a red
+  # workflow that has to be read before it can be ignored, and a red build
+  # nobody reads is a build that stops meaning anything.
+  #
+  # `if:` cannot see the secrets context directly, but it can compare one to the
+  # empty string, and that much GitHub does allow at job level.
   mac:
+    if: vars.BUILD_MAC == 'true'
     runs-on: macos-14   # pinned: a runner bump changes the SDK the app links against
     # Secrets are lifted into env here because `if:` conditions cannot read the
     # secrets context — a workflow that tries fails validation before any job
@@ -270,11 +279,19 @@ jobs:
           retention-days: 1
 
   # ---- the release ---------------------------------------------------------
-  # One job, after both, so the draft is created once and carries everything.
-  # If either build fails there is no release at all — half a release is worse
-  # than none, because the half that exists is what people download.
+  # One job, after the builds, so the draft is created once and carries
+  # everything that was made. A build that RAN and failed still stops the
+  # release — half a release is worse than none, because the half that exists is
+  # what people download. A build that was never asked to run is different, and
+  # `always()` plus the explicit result check below is how those two are told
+  # apart: `needs` alone would skip this job whenever mac is skipped.
+  #
+  # In this fork mac is skipped and the release is Windows-only, which is what
+  # the repository is for. Set the BUILD_MAC repository variable to 'true', with
+  # the Apple secrets in place, and both halves ship from one tag again.
   publish:
     needs: [mac, windows]
+    if: always() && needs.windows.result == 'success' && needs.mac.result != 'failure'
     runs-on: ubuntu-24.04
     # The release lands on this same repo, so the built-in token can create it —
     # no hand-made PAT to rotate. It only needs to be told it may write.
@@ -291,24 +308,35 @@ jobs:
           mv artifacts/*/* release/
           ls -la release/
 
-      # Both metadata files have to be there. A release with latest-mac.yml and
-      # no latest.yml installs fine on Windows and can never update itself — the
-      # exact failure the Mac side already learned to check for.
-      - name: Both platforms are actually here
+      # Whatever was built has to be complete. An installer without its update
+      # metadata installs fine and can never update itself, which is the failure
+      # that is invisible until months later, so each half is checked as a pair
+      # rather than as a pile of files.
+      - name: Every platform that built is complete
         run: |
           set -e
-          for f in latest-mac.yml latest.yml; do
-            [ -f "release/$f" ] || { echo "::error::release/$f missing — one of the two builds did not upload its update metadata"; exit 1; }
-          done
-          ls release/*.dmg release/*.exe >/dev/null
+          shopt -s nullglob
+          exes=(release/*.exe); dmgs=(release/*.dmg)
+          [ ${#exes[@]} -gt 0 ] || { echo "::error::no Windows installer — nothing to release"; exit 1; }
+          [ -f release/latest.yml ] || { echo "::error::installers but no latest.yml — this release could never update itself"; exit 1; }
+          if [ ${#dmgs[@]} -gt 0 ] && [ ! -f release/latest-mac.yml ]; then
+            echo "::error::dmgs but no latest-mac.yml"; exit 1
+          fi
+          echo "releasing: ${#exes[@]} Windows installer(s), ${#dmgs[@]} Mac disk image(s)"
 
       - name: Publish the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
+          shopt -s nullglob
+          notes="Windows 10 and 11: installers for x64 and ARM64. Not code-signed yet, so SmartScreen will warn on first run — More info → Run anyway."
+          if ls release/*.dmg >/dev/null 2>&1; then
+            notes="macOS: signed and notarized, Apple Silicon and Intel. $notes"
+          fi
           gh release create "${GITHUB_REF_NAME}" \
             --repo Shebidab/nami \
             --draft \
-            --title "Nami ${GITHUB_REF_NAME#v}" \
-            --notes "macOS: signed and notarized, Apple Silicon and Intel. Windows 10 and 11: installers for x64 and ARM64." \
+            --title "Nami for Windows ${GITHUB_REF_NAME#v}" \
+            --notes "$notes" \
             release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest-mac.yml release/latest.yml
