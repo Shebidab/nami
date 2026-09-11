@@ -6,6 +6,7 @@
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 const { resolveSpawnProgram } = require('./bin-cache');
 const { userPath } = require('./user-path');
 
@@ -20,14 +21,21 @@ function wireAcpLive(ipcMain) {
       if (cmd.includes('claude-agent-acp')) { cmd = 'npx'; cmdArgs = ['-y', '@agentclientprotocol/claude-agent-acp']; }
       else return { ok: false, error: 'not installed: ' + path.basename(cmd) };
     }
-    const runCwd = cwd && fs.existsSync(cwd) ? cwd : process.env.HOME;
+    // os.homedir(), not $HOME: Windows sets USERPROFILE and usually not HOME, so
+    // a session started outside its folder got cwd: undefined and spawned in
+    // whatever directory the app happened to be launched from.
+    const runCwd = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
     const envPath = await userPath();
     let proc;
     try {
       proc = spawn(cmd, cmdArgs, {
+        // shell:false and windowsHide: the adapter is a program, not a command
+        // line, and a hidden console window is the difference between a bridge
+        // starting and a black box flashing over the desk.
         cwd: runCwd,
-        env: { ...process.env, PATH: envPath || ('/opt/homebrew/bin:/usr/local/bin:' + (process.env.PATH || '')) },
+        env: { ...process.env, PATH: envPath || process.env.PATH || '' },
         stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
       });
     } catch (err) {
       return { ok: false, error: String(err && err.message) };

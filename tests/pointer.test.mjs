@@ -258,3 +258,66 @@ test('the stub is three lines and points at AGENTS.md', () => {
   assert.ok(lines.length <= 3, `stub grew to ${lines.length} lines`);
   assert.match(STUB, /AGENTS\.md/);
 });
+
+// ---- the link that has to work on a machine nobody set up for developing ----
+//
+// A relative symlink is the better link and Windows will only make one for an
+// account holding SeCreateSymbolicLinkPrivilege — Developer Mode, in practice.
+// Nami is for anyone, not just engineers, so the common Windows case is that
+// fs.symlinkSync throws EPERM and native skill registration fails with an error
+// the user can do nothing about. A junction needs no privilege and reads the
+// same to everything here.
+import { makeLink, pointsAt } from '../src/main/pointer.js';
+
+function scratch() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nami-link-'));
+  fs.mkdirSync(path.join(dir, 'skills', 'paper-craft'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'skills', 'paper-craft', 'SKILL.md'), '---\nname: paper-craft\n---\nbody\n');
+  fs.mkdirSync(path.join(dir, '.claude', 'skills'), { recursive: true });
+  return dir;
+}
+
+test('a linked skill resolves through the link, whichever kind got made', () => {
+  const dir = scratch();
+  try {
+    const at = path.join(dir, '.claude', 'skills', 'paper-craft');
+    makeLink(at, path.join('..', '..', 'skills', 'paper-craft'), path.join(dir, 'skills', 'paper-craft'));
+    assert.equal(fs.lstatSync(at).isSymbolicLink(), true, 'a junction reports as a link too');
+    assert.match(fs.readFileSync(path.join(at, 'SKILL.md'), 'utf8'), /paper-craft/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// The comparison that decides whether an existing link is already ours. A
+// junction answers readlink with an absolute path and a symlink with the
+// relative one it was given; comparing the raw strings would call every
+// junction wrong and rebuild every link on every run.
+test('an existing link is recognised whether it is relative or absolute', () => {
+  const dir = scratch();
+  try {
+    const target = path.join(dir, 'skills', 'paper-craft');
+    const relAt = path.join(dir, '.claude', 'skills', 'rel');
+    fs.symlinkSync(path.join('..', '..', 'skills', 'paper-craft'), relAt, 'dir');
+    assert.equal(pointsAt(relAt, target), true, 'a relative symlink points at its target');
+
+    const absAt = path.join(dir, '.claude', 'skills', 'abs');
+    fs.symlinkSync(target, absAt, 'junction');
+    assert.equal(pointsAt(absAt, target), true, 'and so does a junction');
+
+    assert.equal(pointsAt(relAt, path.join(dir, 'skills', 'something-else')), false);
+    assert.equal(pointsAt(path.join(dir, 'skills'), target), false, 'a real folder is not a link to anything');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Windows, and only Windows, falls back. Everywhere else an EPERM from
+// symlinkSync is a real error and must not be swallowed into a second attempt
+// that will fail the same way.
+test('a link that cannot be made at all is still an error', () => {
+  const dir = scratch();
+  try {
+    assert.throws(() => makeLink(
+      path.join(dir, 'no-such-folder', 'paper-craft'),
+      path.join('..', 'skills', 'paper-craft'),
+      path.join(dir, 'skills', 'paper-craft'),
+    ));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

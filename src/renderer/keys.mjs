@@ -133,3 +133,14 @@ export const THIS_MACHINE = HERE.THIS_MACHINE;
 export const YOUR_MACHINE = HERE.YOUR_MACHINE;
 export const SHORTCUTS_LABEL = HERE.SHORTCUTS_LABEL;
 export const MODIFIER_LEGEND = HERE.MODIFIER_LEGEND;
+
+// Where the OS keeps a secret for us, named the way each platform names it. The
+// Keychain is a Mac thing twice over: the word, and the "allow access" dialog
+// that goes with it. Windows has a credential store and asks nothing, so the
+// prompt that would have explained the dialog explains the absence instead.
+export const SECRET_STORE_HINT = MAC
+  ? 'Unlock macOS Keychain to import saved passwords.'
+  : 'Windows could not unlock the credential store — saved passwords are unavailable.';
+export const SECRET_STORE_ASK = MAC
+  ? 'Allow Keychain access if macOS asks.'
+  : 'Nothing to allow — Windows unlocks this with your sign-in.';

@@ -63,9 +63,15 @@ const SEP = { type: 'separator' };
 
 // The last path segment, which is what the folder is called. Recents rows are
 // absolute paths and the menu has room for a name, not a path.
+//
+// Either separator: this file is pure and takes no `path` module, and on
+// Windows a '/' split leaves the whole of C:\work\atlas as one segment — so
+// every Open Recent row read as a full path where a name belongs.
 function folderName(p) {
-  const parts = String(p || '').split('/').filter(Boolean);
-  return parts[parts.length - 1] || p;
+  const parts = String(p || '').split(/[\\/]/).filter(Boolean);
+  const last = parts[parts.length - 1] || p;
+  // A drive root has no name of its own; "C:\" reads better than "C:".
+  return /^[A-Za-z]:$/.test(last) ? last + '\\' : last;
 }
 
 // `platform` is a parameter for the same reason it is one in platform.js: a

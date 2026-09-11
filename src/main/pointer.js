@@ -205,6 +205,44 @@ function safeRead(p) { try { return fs.readFileSync(p, 'utf8'); } catch (_) { re
 // These are not the links that rot. Those are absolute, cross-tool, and aimed at
 // a home directory that moved. These are relative, inside one project, one level
 // deep, created and removed by the same code that creates and removes the skill.
+// The link itself, which is the one part of this that differs by platform.
+//
+// A relative symlink is what we want everywhere: it survives the project folder
+// being moved or renamed, and it is created and removed by the same code that
+// creates and removes the skill.
+//
+// Windows will make one — but only for an account that holds
+// SeCreateSymbolicLinkPrivilege, which in practice means Developer Mode is on.
+// Nami is for anyone, not just engineers, so most Windows users do not have it
+// and fs.symlinkSync throws EPERM for them. A junction needs no privilege at
+// all and behaves like a directory symlink for every reader here — node reports
+// it as a link, readlink returns its target, and a skill inside it resolves.
+//
+// The cost of the fallback is honest and small: a junction records an ABSOLUTE
+// target, so it does rot if the project folder is moved, where the symlink
+// would not. The symlink is tried first for exactly that reason, and the
+// junction only stands in where the OS refuses the better one.
+function makeLink(at, relTarget, absTarget) {
+  try {
+    fs.symlinkSync(relTarget, at, 'dir');
+    return relTarget;
+  } catch (e) {
+    if (process.platform !== 'win32' || (e.code !== 'EPERM' && e.code !== 'EACCES')) throw e;
+    fs.symlinkSync(absTarget, at, 'junction');
+    return absTarget;
+  }
+}
+
+// Does this link already point where we would point it? A junction answers with
+// an absolute path and a symlink with the relative one it was given, so both
+// are resolved against the link's own folder before being compared — otherwise
+// every run tears down and rebuilds every link it finds.
+function pointsAt(at, absTarget) {
+  const to = readLink(at);
+  if (!to) return false;
+  return path.resolve(path.dirname(at), to) === path.resolve(absTarget);
+}
+
 function linkNative({ dir, slugs, agentIds } = {}) {
   if (!dir) return { ok: false, error: 'No folder open.', linked: [], swept: [] };
   const ids = new Set(agentIds || []);
@@ -215,20 +253,24 @@ function linkNative({ dir, slugs, agentIds } = {}) {
     for (const agent of KNOWN_AGENTS) {
       if (!agent.projectSkillsDir || !ids.has(agent.id)) continue;
       const nativeDir = path.join(dir, agent.projectSkillsDir);
+      // The table writes these with forward slashes (".claude/skills"), which
+      // is how each agent documents its own folder — so the depth is counted
+      // the way the table is written, not the way this machine spells a path.
       const depth = agent.projectSkillsDir.split('/').filter(Boolean).length;
       const rel = path.join(...Array(depth).fill('..'), 'skills');
       for (const slug of want) {
         if (!fs.existsSync(path.join(dir, 'skills', slug, 'SKILL.md'))) continue;
         const at = path.join(nativeDir, slug);
-        const target = path.join(rel, slug);
+        const relTarget = path.join(rel, slug);
+        const absTarget = path.join(dir, 'skills', slug);
         if (isLink(at)) {
-          if (readLink(at) === target && fs.existsSync(path.join(at, 'SKILL.md'))) continue;
+          if (pointsAt(at, absTarget) && fs.existsSync(path.join(at, 'SKILL.md'))) continue;
           fs.rmSync(at, { recursive: true, force: true });
         } else if (fs.existsSync(at)) {
           continue;  // a real folder someone put here by hand is theirs, not ours
         }
         fs.mkdirSync(nativeDir, { recursive: true });
-        fs.symlinkSync(target, at);
+        makeLink(at, relTarget, absTarget);
         linked.push(path.join(agent.projectSkillsDir, slug));
       }
       // Sweep our own leftovers: a link into skills/ whose skill has gone. Only
@@ -253,6 +295,8 @@ function readLink(p) { try { return fs.readlinkSync(p); } catch (_) { return '';
 function safeList(dir) { try { return fs.readdirSync(dir); } catch (_) { return []; } }
 
 module.exports = {
+  // exported for the test that proves a link works without Developer Mode
+  makeLink, pointsAt,
   START, END, STUB, POINTER_FILE,
   renderBlock, spliceBlock, readBlock, hasForeignSkillsSection,
   writePointers, pointerStatus, linkNative,

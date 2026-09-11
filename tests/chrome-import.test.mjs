@@ -20,7 +20,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { readChromeCookieRows, readChromeHistory, readChromeLogins, detectChromiumProfiles, chromeTimeToMs, chromeKeychainPassword, readFailure, decryptChromeCookieValue, decryptChromeCookie, deriveChromeKey, stripCookieDomainHash, cookieOptions } = require('../src/main/browser-profiles');
+const { readChromeCookieRows, readChromeHistory, readChromeLogins, detectChromiumProfiles, chromeTimeToMs, chromeKeychainPassword, cookieKeyAvailable, cookieImportStatus, readFailure, decryptChromeCookieValue, decryptChromeCookie, deriveChromeKey, stripCookieDomainHash, cookieOptions } = require('../src/main/browser-profiles');
 
 // Real values, copied from a live Chrome profile. Both are > 2^53.
 const EXPIRES_UTC = 13433531963056867;
@@ -141,16 +141,16 @@ test('each browser is asked for its own Keychain key, never Chrome\'s', () => {
   // Handing Brave's cookies Chrome's key is worse than finding no key at all:
   // the key is truthy, so the "allow Keychain access" hint is suppressed, and
   // every blob then fails its padding check and is silently counted as skipped.
-  assert.equal(chromeKeychainPassword('Brave', spy), 'key-for-Brave');
-  assert.equal(chromeKeychainPassword('Vivaldi', spy), 'key-for-Vivaldi');
-  assert.equal(chromeKeychainPassword('Opera', spy), 'key-for-Opera');
-  assert.equal(chromeKeychainPassword('Arc', spy), 'key-for-Arc');
-  assert.equal(chromeKeychainPassword('Chromium', spy), 'key-for-Chromium');
-  assert.equal(chromeKeychainPassword('Edge', spy), 'key-for-Microsoft Edge');
+  assert.equal(chromeKeychainPassword('Brave', spy, 'darwin'), 'key-for-Brave');
+  assert.equal(chromeKeychainPassword('Vivaldi', spy, 'darwin'), 'key-for-Vivaldi');
+  assert.equal(chromeKeychainPassword('Opera', spy, 'darwin'), 'key-for-Opera');
+  assert.equal(chromeKeychainPassword('Arc', spy, 'darwin'), 'key-for-Arc');
+  assert.equal(chromeKeychainPassword('Chromium', spy, 'darwin'), 'key-for-Chromium');
+  assert.equal(chromeKeychainPassword('Edge', spy, 'darwin'), 'key-for-Microsoft Edge');
   assert.deepEqual(asked, ['Brave Safe Storage', 'Vivaldi Safe Storage', 'Opera Safe Storage', 'Arc Safe Storage', 'Chromium Safe Storage', 'Microsoft Edge Safe Storage']);
   // Chrome's own channels share Google Chrome's item, which is the default.
   for (const channel of ['Chrome', 'Chrome Beta', 'Chrome Canary']) {
-    assert.equal(chromeKeychainPassword(channel, spy), 'key-for-Chrome');
+    assert.equal(chromeKeychainPassword(channel, spy, 'darwin'), 'key-for-Chrome');
   }
 });
 
@@ -231,4 +231,40 @@ test('SameSite=None is only ever written on a secure cookie', () => {
   // an ordinary lax cookie keeps whatever Chrome recorded
   const lax = cookieOptions({ host_key: '.example.com', name: 'a', value: 'b', path: '/', is_secure: 0, is_httponly: 0, samesite: 1, expires_utc: 0 });
   assert.equal(lax.secure, false);
+});
+
+// Windows keeps the same key behind DPAPI and encrypts with AES-256-GCM rather
+// than CBC — a different scheme end to end, not a different path to the same
+// one. The Mac code would run against a Windows profile perfectly happily,
+// decrypt nothing, and report a cheerful zero, which is the failure the
+// per-browser key above already exists to prevent. So the key is refused
+// outright, and the status says why.
+test('a platform whose key Nami cannot read is told so, not offered an import', () => {
+  assert.equal(chromeKeychainPassword('Chrome', () => 'should never be called', 'win32'), null);
+  assert.equal(cookieKeyAvailable('win32'), false);
+  assert.equal(cookieKeyAvailable('linux'), false);
+  assert.equal(cookieKeyAvailable('darwin'), true);
+});
+
+test('the import status reports what this machine can actually do', () => {
+  const home = '/Users/x';
+  const root = home + '/Library/Application Support/Google/Chrome';
+  const exists = (p) => p === root || p.startsWith(root + '/Default/') || p === root + '/Default';
+  const opts = { home, exists, readFile: () => '{}' };
+
+  const mac = cookieImportStatus({ ...opts, platform: 'darwin' });
+  assert.equal(mac.cookieKey, true);
+  assert.equal(mac.cookieKeyNote, '');
+
+  const win = cookieImportStatus({ ...opts, platform: 'darwin', ...{} });
+  assert.equal(win.available, mac.available, 'detection itself does not change');
+
+  const onWindows = cookieImportStatus({ ...opts, platform: 'win32' });
+  assert.equal(onWindows.cookieKey, false);
+  assert.match(onWindows.cookieKeyNote, /password CSV/);
+  for (const b of onWindows.browsers) {
+    assert.equal(b.cookies, false, 'a cookie import that cannot decrypt must not be offered');
+    // history needs no key at all, so it stays on offer
+    assert.equal(b.history, mac.browsers.find((m) => m.name === b.name).history);
+  }
 });

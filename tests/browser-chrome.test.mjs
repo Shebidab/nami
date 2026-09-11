@@ -64,7 +64,10 @@ test('quiet new-tab page is blank, not a product tour', () => {
   assert.match(css, /\.browser-profile-result[^{]*\{[^}]*padding-top:\s*12px/);
   assert.match(css, /\.browser-check[^{]*\{[^}]*grid-template-columns:\s*16px/);
   assert.match(pane, /<span>Site data and sign-ins<\/span>/);
-  assert.match(pane, /Allow Keychain access if macOS asks/);
+  // The sentence itself moved into keys.mjs — the Keychain is a Mac thing twice
+  // over, the word and the dialog, and on Windows there is nothing to allow.
+  // What this pins is that the import sheet still SAYS something about it.
+  assert.match(pane, /SECRET_STORE_ASK/);
   assert.doesNotMatch(pane, /Quit Chrome first/);
   assert.match(pane, /p\.url && p\.url !== 'about:blank'/);
 });

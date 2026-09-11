@@ -254,9 +254,9 @@ function agentById(id) { return KNOWN_AGENTS.find((a) => a.id === id) || null; }
 // separators on Windows and leaves them alone everywhere else.
 function expandHome(p, home, platform = process.platform) {
   const s = String(p || '');
-  if (!/^~(?:[\/]|$)/.test(s)) return s;
-  const rest = s.slice(1).replace(/^[\/]/, '');
-  return rest ? pathFor(platform).join(home, ...rest.split(/[\/]/)) : home;
+  if (!/^~(?:[\\/]|$)/.test(s)) return s;
+  const rest = s.slice(1).replace(/^[\\/]/, '');
+  return rest ? pathFor(platform).join(home, ...rest.split(/[\\/]/)) : home;
 }
 // The display twin: ~/.local/bin/hermes reads better than /Users/you/.local/…,
 // and ~\.local\bin\claude.exe better than C:\Users\you\.local\… — the same

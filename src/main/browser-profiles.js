@@ -169,9 +169,30 @@ function readChromeCookieRows(file) {
   try { return readSqliteRows(file, 'SELECT host_key, name, value, encrypted_value, path, expires_utc, is_secure, is_httponly, samesite FROM cookies'); }
   catch { return readSqliteRows(file, 'SELECT host_key, name, value, encrypted_value, path, expires_utc, is_secure, is_httponly FROM cookies'); }
 }
-function cookieImportStatus(options) {
+// What this machine could actually import from each profile it found.
+//
+// `cookies` is not "does a Cookies database exist" — it did mean that, and on
+// Windows that answer offers an import which then decrypts nothing. It is "is
+// there a database AND can we get the key that opens it", which is the question
+// the button is really asking.
+function cookieImportStatus(options = {}) {
+  const platform = options.platform || process.platform;
   const sources = detectChromiumProfiles(options);
-  return { available: sources.length > 0, browsers: sources.map((s) => ({ browser: s.browser, name: s.name, cookies: !!s.cookies, passwords: !!s.logins, history: !!s.history })) };
+  const keyed = cookieKeyAvailable(platform);
+  return {
+    available: sources.length > 0,
+    // Named so the UI can explain itself rather than greying a button out for
+    // no stated reason.
+    cookieKey: keyed,
+    cookieKeyNote: keyed ? '' : 'Chromium cookie encryption on this platform needs a key Nami cannot read yet. History still imports; for sign-ins, import a password CSV and sign in inside Nami.',
+    browsers: sources.map((s) => ({
+      browser: s.browser,
+      name: s.name,
+      cookies: keyed && !!s.cookies,
+      passwords: !!s.logins,
+      history: !!s.history,
+    })),
+  };
 }
 // Chrome counts time in microseconds since 1601, so a cookie expiry is a
 // 17-digit integer — bigger than Number.MAX_SAFE_INTEGER. node:sqlite will not
@@ -281,7 +302,37 @@ const SAFE_STORAGE = {
   Arc: 'Arc',
   Chromium: 'Chromium',
 };
-function chromeKeychainPassword(browser, execFileSync) {
+// Where the storage key that decrypts a Chromium profile comes from, and
+// whether this machine can get at it at all.
+//
+// macOS keeps it in the login Keychain, one item per browser build, and
+// `security find-generic-password` reads it with the user's consent. The
+// scheme underneath is PBKDF2 → AES-128-CBC, which is what decryptChromeBlob
+// implements.
+//
+// Windows is a different scheme end to end, not a different path to the same
+// one. The key lives in `Local State` as `os_crypt.encrypted_key`, wrapped by
+// DPAPI and unwrappable only by CryptUnprotectData — a Win32 call node does not
+// expose and Electron's safeStorage cannot stand in for, since it decrypts only
+// what it encrypted itself. The cookies are then AES-256-GCM, not CBC.
+//
+// So on Windows this returns null, and every caller treats a null key the way
+// it already treats a locked Keychain: no cookie import, and it says so. That
+// is the whole point of naming it here rather than letting it fail quietly —
+// the Mac code path would run happily on a Windows profile, decrypt nothing,
+// and report a cheerful zero, which is the exact failure this file has a
+// paragraph about further down.
+//
+// Passwords and history are unaffected on both: history is plain SQLite with
+// nothing encrypted in it, and a password CSV is imported rather than read.
+const COOKIE_KEY_PLATFORMS = new Set(['darwin']);
+
+function cookieKeyAvailable(platform = process.platform) {
+  return COOKIE_KEY_PLATFORMS.has(platform);
+}
+
+function chromeKeychainPassword(browser, execFileSync, platform = process.platform) {
+  if (!cookieKeyAvailable(platform)) return null;
   if (typeof execFileSync !== 'function') return null;
   const label = SAFE_STORAGE[browser] || 'Chrome';
   try {
@@ -386,7 +437,9 @@ function createProfileStore({ directory, safeStorage }) {
   function available() { return safeStorage.isEncryptionAvailable(); }
   function readVault(id) {
     const file = vaultPath(id); if (!fs.existsSync(file)) return [];
-    if (!available()) throw new Error('Unlock macOS Keychain to use saved passwords.');
+    if (!available()) throw new Error(process.platform === 'darwin'
+      ? 'Unlock macOS Keychain to use saved passwords.'
+      : 'Windows could not unlock the credential store Nami keeps saved passwords in.');
     return JSON.parse(safeStorage.decryptString(fs.readFileSync(file)));
   }
   function writeVault(id, entries) {
@@ -462,5 +515,5 @@ function createProfileStore({ directory, safeStorage }) {
 module.exports = {
   createProfileStore, parsePasswordCsv, isGoogleHost, filterImportableCookies, uniqueDownloadPath,
   popupDecision, permissionAllowed, cookieUrl, chromeExpiryUnix, deriveChromeKey, decryptChromeCookie, decryptChromeCookieValue, stripCookieDomainHash, cookieOptions,
-  detectChromiumProfiles, readChromeCookieRows, cookieImportStatus, chromeKeychainPassword, importChromiumCookies,
+  detectChromiumProfiles, readChromeCookieRows, cookieImportStatus, chromeKeychainPassword, cookieKeyAvailable, importChromiumCookies,
   readChromeLogins, readChromeHistory, chromeTimeToMs, chromeBlobPrefix, readFailure, popupModeOf };

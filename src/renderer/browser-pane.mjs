@@ -1,3 +1,4 @@
+import { SECRET_STORE_HINT, SECRET_STORE_ASK } from './keys.mjs';
 import { createBrowserAnnotations } from './browser-annotations.mjs';
 import { browserSettingsHtml, wireBrowserSettings } from './browser-settings.mjs';
 import { createBrowserOverlays } from './browser-overlays.mjs';
@@ -169,7 +170,7 @@ export function createBrowserPane({ api, state, tiles, uid, esc, helpIcon, isFil
     q('#profile-import',host).onclick=()=>ask('Import a password CSV into '+chosen.name+'?',async()=>{const out=await run({action:'import-passwords'});if(out)result.textContent=out.canceled?'Cancelled.':out.message||('Imported '+(out.imported??0)+' passwords.');});
     q('#profile-clear',host).onclick=()=>{const siteData=q('#clear-signins',host).checked,credentials=q('#clear-passwords',host).checked;if(!siteData&&!credentials){result.textContent='Choose data to clear.';return;}ask('Clear selected data from '+chosen.name+'?',async()=>{if(await run({action:'clear',siteData,credentials,confirmed:true})){result.textContent='Cleared.';}});};
     const canFill=!!view && chosen.id===view.profileId;
-    q('#profile-import',host).disabled=!r.capabilities?.passwordCsv; if(!r.capabilities?.passwordCsv) q('#profile-import',host).title='Unlock macOS Keychain to import saved passwords.';
+    q('#profile-import',host).disabled=!r.capabilities?.passwordCsv; if(!r.capabilities?.passwordCsv) q('#profile-import',host).title=SECRET_STORE_HINT;
     let currentOrigin=''; try{currentOrigin=new URL(view?.url).origin;}catch{}
     const saved=await run({action:'credentials'});if(state.overlay!==o||!saved)return;
     q('#profile-credentials',host).innerHTML=(saved.credentials||[]).map(c=>`<div class="browser-credential"><span>${esc(c.origin)}<small>${esc(c.username)}</small></span>${canFill&&c.origin===currentOrigin?`<button class="btn btn--small" data-fill="${esc(c.id)}">Fill</button>`:''}<button class="btn btn--small" data-delete="${esc(c.id)}">Delete</button></div>`).join('')||'<p class="note">No saved passwords.</p>';
@@ -188,7 +189,7 @@ export function createBrowserPane({ api, state, tiles, uid, esc, helpIcon, isFil
     const dest=r.profiles.find(p=>p.id===(o.profileId))||r.profiles[0];
     if(!dest){host.textContent='Create a Nami profile first.';return;}
     host.innerHTML=`<label class="field-label">From<select id="import-source">${sources.map((s,i)=>`<option value="${i}">${esc(s.browser)} · ${esc(s.name)}</option>`).join('')||'<option value="">No Chrome profile found</option>'}</select></label>
-      <p class="note">Allow Keychain access if macOS asks.</p>
+      <p class="note">${SECRET_STORE_ASK}</p>
       <label class="browser-check"><input type="checkbox" id="import-passwords" checked><span>Saved passwords</span></label>
       <label class="browser-check"><input type="checkbox" id="import-cookies" checked><span>Cookies</span></label>
       <label class="browser-check"><input type="checkbox" id="import-history" checked><span>Browsing history</span></label>
