@@ -200,6 +200,20 @@ nsis:
   # every later auto-update needs one too. electron-updater installs silently in
   # the background; an update that stops to ask for administrator rights is an
   # update that never happens.
+  #
+  # Measured, because "what if someone runs it as administrator anyway" is the
+  # first thing anyone asks about a per-user installer. Run elevated, it still
+  # installs per-user: same %LOCALAPPDATA%\Programs\Nami, same HKCU uninstall
+  # entry, same user Start-menu shortcut, and nothing in Program Files or HKLM.
+  # The files end up owned by BUILTIN\Administrators rather than by the user —
+  # that is just what an elevated process creates — but LOCALAPPDATA's inherited
+  # ACL still grants the user Full Control, so the app runs unelevated and a
+  # background update can still replace Nami.exe. Verified both, by replacing it.
+  #
+  # The one case that does bite: elevating as a DIFFERENT administrator account
+  # installs into that account's profile, where the original user cannot see it.
+  # Nothing here can prevent that, and nothing here should try — it is what
+  # per-user means.
   oneClick: false
   perMachine: false
   allowElevation: false
