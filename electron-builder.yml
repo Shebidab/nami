@@ -170,6 +170,18 @@ win:
     - target: nsis
       arch: [x64, arm64]
   icon: build/icon.png     # electron-builder renders the .ico from this
+  # KNOWN, and deliberately not fixed here. A real per-user install shows
+  # "Nami 0.5.1 — Calvin Hia" in Apps & features: NSIS writes its Publisher from
+  # appInfo.companyName, which electron-builder reads from `author.name` in
+  # package.json and from nowhere else. This is the same root as the Info.plist
+  # copyright the `copyright:` line at the top of this file exists to correct,
+  # surfacing a second time.
+  #
+  # There is no win: key that overrides it — `publisherName` moved under
+  # signtoolOptions in electron-builder 26 and governs signature verification
+  # rather than this string. The only lever is `author` in package.json, which
+  # is the Mac bundle's author too, so changing it is a decision about the
+  # product rather than about the Windows build. Left for whoever owns that.
   # Same list as the Mac's fileAssociations and for the same reasons: Nami is
   # offered as an option in "Open with", it never takes a default, and the list
   # stays short because appearing under every file in Explorer is noise.
