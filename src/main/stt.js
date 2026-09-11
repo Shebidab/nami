@@ -71,7 +71,7 @@ async function postForm({ url, headers, fields, file, fetchImpl }) {
 
 const local = {
   id: 'local',
-  label: 'On this Mac',
+  label: 'On this device',
   blurb: 'free, offline, nothing leaves your machine',
   kind: 'local',
   input: 'pcm',

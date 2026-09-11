@@ -10,7 +10,7 @@ test('a master and an in-folder Claude agent sit on the project Agents shelf', (
   assert.equal(isMacItem(item()), false);
 });
 
-test('user and plugin agents sit on Agents on this Mac', () => {
+test('user and plugin agents sit on Agents on this device', () => {
   assert.equal(shelfOf(item({ scope: 'user', platform: 'claude' })), 'mac-agents');
   assert.equal(shelfOf(item({ scope: 'plugin', platform: 'claude' })), 'mac-agents');
   assert.equal(cliKey(item({ scope: 'plugin', platform: 'claude' })), 'claude');

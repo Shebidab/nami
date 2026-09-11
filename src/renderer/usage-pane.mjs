@@ -71,7 +71,7 @@ function cardHtml(group) {
 }
 
 function quietCard(row) {
-  return `<section class="usage-card usage-card--quiet"><div class="usage-card-head"><strong>${esc(row.providerName || row.name)}</strong><span class="usage-value">${esc(row.detail || 'No quota on this Mac yet')}</span></div></section>`;
+  return `<section class="usage-card usage-card--quiet"><div class="usage-card-head"><strong>${esc(row.providerName || row.name)}</strong><span class="usage-value">${esc(row.detail || 'No quota on this device yet')}</span></div></section>`;
 }
 
 function unavailableBlock(rows) {

@@ -26,7 +26,7 @@ function startHereNote(folderName) {
 
 This is **${name}**, the folder you just gave Nami.
 
-Nami can read and change things in here, and nowhere else on your Mac. That is
+Nami can read and change things in here, and nowhere else on your device. That is
 the whole safety model, and it is why every session asks you for a folder first.
 
 ## Nami runs agents. It isn't one.

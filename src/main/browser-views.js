@@ -361,7 +361,7 @@ function wireBrowserViews(ipcMain, { readSettings, writeSettings }) {
       });
     } else if (action === 'import-passwords') {
       profiles.get(profileId);
-      if (!profiles.available()) throw new Error('macOS protected password storage is unavailable.');
+      if (!profiles.available()) throw new Error('Protected password storage is unavailable on this device.');
       const chosen = await dialog.showOpenDialog(w, { title: 'Import an exported Chrome password CSV', properties: ['openFile'], filters: [{ name: 'Chrome password export', extensions: ['csv'] }] });
       if (chosen.canceled || !chosen.filePaths[0]) return { canceled: true };
       const file = chosen.filePaths[0];
@@ -469,7 +469,7 @@ function wireBrowserViews(ipcMain, { readSettings, writeSettings }) {
         // own outcome. Folding it in with "encrypted" is how an import came to
         // report 3,866 cookies read, write 31 of them, and say nothing.
         else if (cookies.rejected) extra = ' ' + cookies.rejected + ' cookies were refused by the browser and not copied.';
-        else if (cookies.skippedV20) extra = ' ' + source.browser + ' encrypts these cookies on this Mac, so they could not be copied.';
+        else if (cookies.skippedV20) extra = ' ' + source.browser + ' encrypts these cookies on this device, so they could not be copied.';
         else if (!key && (args.cookies !== false || args.passwords !== false) && !passwords.imported) extra = ' Allow Keychain access when asked, then try again.';
         return { ...cookies, passwords: passwords.imported, history: history.imported, message: (parts.length ? 'Imported ' + parts.join(', ') : 'Nothing imported.') + extra };
       });

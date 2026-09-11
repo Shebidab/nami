@@ -1,7 +1,7 @@
 {
   "name": "nami",
   "productName": "Nami",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Nami for Windows — a Windows 10/11 port of the Nami AI agent workbench. Open a folder, run Claude Code and other agents as paper tiles.",
   "main": "src/main/main.js",
   "author": "Calvin Hia",

@@ -93,8 +93,8 @@ test('empty CLI cards collapse behind one closed line instead of filling the pan
   const html = usageContent({
     accounts: [
       { id: 'codex', accountId: 'codex', providerId: 'codex', providerName: 'Codex', remaining: 40, windowLabel: '5 hours', status: 'reported' },
-      { id: 'grok', name: 'Grok', providerId: 'grok', providerName: 'Grok', status: 'unavailable', remaining: null, detail: 'No quota on this Mac yet' },
-      { id: 'hermes', name: 'Hermes', providerId: 'hermes', providerName: 'Hermes', status: 'unavailable', remaining: null, detail: 'No quota on this Mac yet' },
+      { id: 'grok', name: 'Grok', providerId: 'grok', providerName: 'Grok', status: 'unavailable', remaining: null, detail: 'No quota on this device yet' },
+      { id: 'hermes', name: 'Hermes', providerId: 'hermes', providerName: 'Hermes', status: 'unavailable', remaining: null, detail: 'No quota on this device yet' },
     ],
   });
   const closed = html.match(/<details class="usage-unavailable">[\s\S]*?<\/details>/);

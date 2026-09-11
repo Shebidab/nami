@@ -4722,12 +4722,12 @@ function renderFolderFirst() {
           <span class="col"><span class="name">${esc(r.name)}</span><span class="desc">${esc(r.pathShort)}</span></span>
           ${r.pinned ? '<span class="ff-pin">pinned</span>' : ''}
         </div>`).join('')}</div>
-      <button class="ff-other" id="ff-pick"><span class="plus">＋</span><span>Choose another folder…</span><span class="kbd">opens the Mac dialog</span></button>`
+      <button class="ff-other" id="ff-pick"><span class="plus">＋</span><span>Choose another folder…</span><span class="kbd">opens the system dialog</span></button>`
     : `<div class="ff-empty">
         <div class="ff-msg">No folders here yet</div>
         <div class="ff-sub">a folder is where your files and the session live. One of your projects, or an empty one to start in</div>
         <button class="btn btn--go" id="ff-pick">Choose a folder…</button>
-        <div class="ff-hint">opens the Mac folder dialog</div>
+        <div class="ff-hint">opens the system folder dialog</div>
       </div>`}`, { top: true });
   // A pick has to outlive the overlay: closeOverlay() nulls S.overlay, so the
   // continuation is captured before anything closes.
@@ -6336,7 +6336,7 @@ function renderConnectOwn() {
     ${svcKnowsLine() ? `<div class="setup-note">${svcKnowsLine()}</div>` : ''}
     <div class="chip-row" id="own-scope" style="margin:8px 0">
       <span class="pick-chip${o.scope === 'project' ? ' picked' : ''}" data-v="project">this project</span>
-      <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">this Mac</span></div>
+      <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">this device</span></div>
     <div class="setup-actions">
       <button class="btn btn--go" id="own-go">Connect</button>
       ${b ? '<button class="btn" id="own-clear">Different bundle</button>' : '<button class="btn" id="own-bundle">Choose a bundle…</button>'}</div>`);
@@ -6400,14 +6400,14 @@ function renderConnectForm() {
           : `No agent is installed yet. Press ${K.newSession} to add one first.`}</div>`
       : folder
         ? `<p class="setup-copy">Pick the one folder your agents may read and edit. Nothing outside it is reachable.</p><button class="btn" id="sv-pick-folder">Choose a folder…</button><div class="setup-note" id="sv-folder-note">${esc(o.values.folder ? shortHome(o.values.folder) : '')}</div>`
-        : `<p class="setup-copy">${esc(svc.name)} gives you one key so your agents can get in. Paste it here. It stays on your Mac.</p>${keyRows}`}
+        : `<p class="setup-copy">${esc(svc.name)} gives you one key so your agents can get in. Paste it here. It stays on your device.</p>${keyRows}`}
     ${svcKnowsLine() ? `<div class="setup-note">${svcKnowsLine()}</div>` : ''}
     <details class="sv-fold"${o.foldOpen ? ' open' : ''}><summary>choices (fine as they are)</summary>
       <div class="sv-fold-body">
         <div class="sv-lab">works in</div>
         <div class="chip-row" id="sv-scope">
           <span class="pick-chip${o.scope === 'project' ? ' picked' : ''}" data-v="project">this project</span>
-          <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">this Mac</span></div>
+          <span class="pick-chip${o.scope === 'user' ? ' picked' : ''}" data-v="user">this device</span></div>
       </div></details>
     <div class="setup-actions">
       <button class="btn btn--go" id="sv-connect">${guided ? 'Set it up with my agent' : 'Connect'}</button>

@@ -20,7 +20,7 @@ test('the note teaches the two things that stop people', () => {
   // The boundary, stated as the promise itself. This is the sentence that earns
   // the trust the whole app runs on, so it is pinned: a rewrite that quietly
   // drops it should fail here rather than ship.
-  assert.match(md, /nowhere else on your Mac/i);
+  assert.match(md, /nowhere else on your device/i);
   // The approval card, named exactly as the UI names it — a note that calls it
   // anything else sends people looking for a control that does not exist.
   assert.ok(md.includes('Needs your OK'), 'should name the approval card');

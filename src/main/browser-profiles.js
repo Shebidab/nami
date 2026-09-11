@@ -443,7 +443,7 @@ function createProfileStore({ directory, safeStorage }) {
     return JSON.parse(safeStorage.decryptString(fs.readFileSync(file)));
   }
   function writeVault(id, entries) {
-    if (!available()) throw new Error('macOS protected password storage is unavailable.');
+    if (!available()) throw new Error('Protected password storage is unavailable on this device.');
     write(vaultPath(id), safeStorage.encryptString(JSON.stringify(entries)));
   }
   persist();

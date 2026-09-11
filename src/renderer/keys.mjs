@@ -90,10 +90,11 @@ export function keysFor(platform) {
     MOD_CLICK: mac ? '⌘ Click' : 'Ctrl-click',
     ALT_MOD_CLICK: mac ? '⌥⌘ Click' : 'Ctrl+Alt-click',
 
-    // "…on this Mac only, nothing syncs" is a promise Nami makes about where
-    // things are kept, and it has to be true on the machine reading it.
-    THIS_MACHINE: mac ? 'this Mac' : 'this PC',
-    YOUR_MACHINE: mac ? 'your Mac' : 'your PC',
+    // "…on this device only, nothing syncs" is a promise Nami makes about
+    // where things are kept. "Device" is true on every machine that reads
+    // it, so the promise does not have to know which one it is on.
+    THIS_MACHINE: 'this device',
+    YOUR_MACHINE: 'your device',
 
     // The Settings row that opens the shortcuts sheet. On a Mac the ⌘ in front
     // of it reads as an ornament; "Ctrl Shortcuts & gestures" would read as a

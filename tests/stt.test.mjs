@@ -177,7 +177,7 @@ test('an engine that throws is reported, not propagated', async () => {
   engine.transcribe = async () => { throw new Error('model exploded'); };
   const res = await transcribe({ clip: clip(), settings: {}, env: {}, deps: { engine } });
   assert.equal(res.ok, false);
-  assert.match(res.error, /On this Mac: model exploded/);
+  assert.match(res.error, /On this device: model exploded/);
 });
 
 test('a clip that failed to decode gives a human error, not a crash', async () => {
