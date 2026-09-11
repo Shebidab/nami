@@ -29,15 +29,28 @@ const MUST_SHIP = [
   'src/main/main.js', 'src/renderer/index.html', 'package.json',
 ];
 
+// Every app.asar this build produced, whichever platform produced it.
+//
+// The two layouts are not alike, so they are written out rather than guessed
+// at. macOS puts it inside a bundle, one directory per architecture:
+//   release/mac-arm64/Nami.app/Contents/Resources/app.asar
+// Windows has no bundle, and electron-builder names the x64 output without its
+// architecture the way it does everywhere else:
+//   release/win-unpacked/resources/app.asar
+//   release/win-arm64-unpacked/resources/app.asar
 function bundles() {
-  return [['release', 'Nami.app'], ['release-review', 'Nami Review.app']].flatMap(([directory, name]) => {
+  const found = [];
+  for (const [directory, macName] of [['release', 'Nami.app'], ['release-review', 'Nami Review.app']]) {
     const rel = path.join(ROOT, directory);
-    if (!fs.existsSync(rel)) return [];
-    return fs.readdirSync(rel)
-    .filter((d) => d.startsWith('mac'))
-    .map((d) => path.join(rel, d, name, 'Contents', 'Resources', 'app.asar'))
-    .filter((p) => fs.existsSync(p));
-  });
+    if (!fs.existsSync(rel)) continue;
+    for (const d of fs.readdirSync(rel)) {
+      const file = d.startsWith('mac') ? path.join(rel, d, macName, 'Contents', 'Resources', 'app.asar')
+        : d.startsWith('win') ? path.join(rel, d, 'resources', 'app.asar')
+          : null;
+      if (file && fs.existsSync(file)) found.push(file);
+    }
+  }
+  return found;
 }
 
 const found = bundles();
@@ -54,11 +67,19 @@ try { asar = require('@electron/asar'); } catch (_) {
 
 let bad = 0;
 for (const file of found) {
-  const arch = file.split(path.sep).slice(-5)[0];
+  // The directory electron-builder named for this slice: mac-arm64,
+  // win-unpacked, and so on. Counted from the release root rather than from the
+  // end, because the two layouts put the asar at different depths.
+  const arch = path.relative(ROOT, file).split(path.sep)[1];
   console.log(`\n== ${arch}`);
 
-  // listPackage returns every path inside, each leading with a separator
-  const entries = asar.listPackage(file).map((e) => e.replace(/^[/\\]/, ''));
+  // listPackage returns every path inside, each leading with a separator — and
+  // written with the separator of the machine that packed it, so an asar built
+  // on Windows lists \src\main\main.js. MUST_SHIP is spelled the one way a path
+  // is spelled in this file, so the entries are normalised to match it. Without
+  // that, the check reported that the app could not run, about an app that ran.
+  const entries = asar.listPackage(file)
+    .map((e) => e.replace(/^[/\\]/, '').split('\\').join('/'));
   const top = [...new Set(entries.map((e) => e.split(/[/\\]/)[0]))].sort();
   console.log(`   ${entries.length} entries, top level: ${top.join(', ')}`);
 

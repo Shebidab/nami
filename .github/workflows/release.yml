@@ -1,4 +1,4 @@
-# Tag a version, get an installer. Nothing else publishes.
+# Tag a version, get installers. Nothing else publishes.
 #
 # This is the wall between working and shipping: master moves as freely as you
 # like and nobody downloads it. Only a `v*` tag becomes something a user can
@@ -8,12 +8,21 @@
 #
 #   npm version patch && git push --follow-tags
 #
+# Two builds, two runners, one release. macOS cannot cross-build a signed
+# Windows installer and Windows cannot notarize, so each platform is built by a
+# machine of its own kind and the artifacts are joined at the end. The release
+# is created once, by the job that waits for both — a draft release created
+# twice is a race that produces two drafts and a confusing morning.
+#
 # Secrets this needs:
 #   CSC_LINK            base64 of the Developer ID .p12  ) omit both and the
-#   CSC_KEY_PASSWORD    its export password               ) build is unsigned
+#   CSC_KEY_PASSWORD    its export password               ) mac build is unsigned
 #   APPLE_API_KEY_P8    base64 of the App Store Connect .p8  ) omit these and
 #   APPLE_API_KEY_ID    the key's ID                         ) it is signed
 #   APPLE_API_ISSUER    the issuer UUID                      ) but not notarized
+#   WINDOWS_CSC_LINK       base64 of an Authenticode .pfx  ) omit both and the
+#   WINDOWS_CSC_KEY_PASSWORD  its password                 ) Windows build is
+#                                                          ) unsigned, and says so
 #
 # Note the name: electron-builder's APPLE_API_KEY is a PATH to the .p8, not its
 # contents, so the secret holds the bytes under a different name and the step
@@ -25,12 +34,9 @@ on:
     tags: ['v*']
 
 jobs:
-  build:
+  # ---- macOS ---------------------------------------------------------------
+  mac:
     runs-on: macos-14   # pinned: a runner bump changes the SDK the app links against
-    # The release lands on this same repo, so the built-in token can create it —
-    # no hand-made PAT to rotate. It only needs to be told it may write.
-    permissions:
-      contents: write
     # Secrets are lifted into env here because `if:` conditions cannot read the
     # secrets context — a workflow that tries fails validation before any job
     # starts, with "this run likely failed because of a workflow file issue" and
@@ -84,7 +90,7 @@ jobs:
           printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$HOME/private_keys/AuthKey.p8"
           echo "APPLE_API_KEY=$HOME/private_keys/AuthKey.p8" >> "$GITHUB_ENV"
 
-      # Build only — publishing is a separate step below, deliberately.
+      # Build only — publishing is a separate job below, deliberately.
       #
       # `--publish always` would upload latest-mac.yml as electron-builder wrote
       # it, which is before the notarization staple changes the dmg and before
@@ -144,17 +150,6 @@ jobs:
       - name: Check what is inside the app
         run: node scripts/check-bundle.mjs
 
-      - name: Publish the draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --repo mrdainami/nami \
-            --draft \
-            --title "Nami ${GITHUB_REF_NAME#v}" \
-            --notes "Signed and notarized for macOS. Apple Silicon and Intel builds attached." \
-            release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml
-
       - name: Report what shipped
         if: always()
         run: |
@@ -164,3 +159,156 @@ jobs:
             codesign -dv "$app" 2>&1 | grep -E 'Identifier|TeamIdentifier' || echo "  unsigned"
             spctl -a -vvv -t install "$app" 2>&1 | tail -2 || true
           done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          # latest-mac.yml is as much a release artifact as the dmg: without it
+          # no installed Nami can ever see this version.
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---- Windows -------------------------------------------------------------
+  windows:
+    runs-on: windows-2022   # pinned for the same reason macos-14 is
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache Whisper weights
+        uses: actions/cache@v4
+        with:
+          path: build/models
+          key: whisper-${{ runner.os }}-${{ hashFiles('scripts/fetch-model.mjs', 'src/main/stt-model.js') }}
+
+      - run: npm ci
+
+      # The same gate, on the other operating system — and it is not a
+      # formality. Roughly a hundred and fifty tests failed the first time this
+      # suite ran on Windows, every one of them about a real difference in how
+      # paths, shells or PATH work there. A Mac-only CI would have shipped all
+      # of it.
+      - run: npm test
+
+      # Unsigned is allowed and is not silent. Windows shows SmartScreen's
+      # "unrecognised app" wall for an unsigned installer, which is the Windows
+      # equivalent of the Gatekeeper warning the Mac build exists to avoid — so
+      # a release built without a certificate says so in the log rather than
+      # being discovered by whoever downloads it.
+      - name: Note whether this build will be signed
+        shell: bash
+        env:
+          WINDOWS_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+        run: |
+          if [ -z "$WINDOWS_CSC_LINK" ]; then
+            echo "::warning::No WINDOWS_CSC_LINK — the installer will be unsigned, and Windows SmartScreen will warn every person who downloads it."
+          else
+            echo "signing certificate present"
+          fi
+
+      - name: Build the installers
+        env:
+          # electron-builder reads these two for Authenticode signing; with
+          # neither set it builds unsigned rather than failing.
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: npm run dist
+
+      # Same two checks the Mac build runs, for the same reasons: that the
+      # metadata describes the bytes being uploaded, and that the app carries
+      # only what it needs to run.
+      - name: Check the update metadata
+        run: node scripts/check-update-metadata.mjs
+
+      - name: Check what is inside the app
+        run: node scripts/check-bundle.mjs
+
+      # Does the thing a user would double-click actually install? A silent
+      # per-user install into a scratch directory, then look for the exe it was
+      # supposed to put there. This catches an installer that builds perfectly
+      # and cannot run — a missing icon, an NSIS script error, a target the
+      # runner's Defender objects to.
+      - name: Install it, the way a person would
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'nami-install-test'
+          Start-Process -FilePath release\Nami-x64.exe -ArgumentList '/S', "/D=$target" -Wait
+          $exe = Join-Path $target 'Nami.exe'
+          if (-not (Test-Path $exe)) {
+            Get-ChildItem $target -Recurse -ErrorAction SilentlyContinue | Select-Object -First 40 | Out-String | Write-Host
+            throw "the installer ran and left no Nami.exe in $target"
+          }
+          "installed: $((Get-Item $exe).VersionInfo.FileVersion)" | Write-Host
+
+      - name: Report what shipped
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem release\*.exe | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            "{0}  {1:n0} bytes  signature={2}" -f $_.Name, $_.Length, $sig.Status | Write-Host
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---- the release ---------------------------------------------------------
+  # One job, after both, so the draft is created once and carries everything.
+  # If either build fails there is no release at all — half a release is worse
+  # than none, because the half that exists is what people download.
+  publish:
+    needs: [mac, windows]
+    runs-on: ubuntu-24.04
+    # The release lands on this same repo, so the built-in token can create it —
+    # no hand-made PAT to rotate. It only needs to be told it may write.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Gather what the two builds made
+        run: |
+          mkdir -p release
+          mv artifacts/*/* release/
+          ls -la release/
+
+      # Both metadata files have to be there. A release with latest-mac.yml and
+      # no latest.yml installs fine on Windows and can never update itself — the
+      # exact failure the Mac side already learned to check for.
+      - name: Both platforms are actually here
+        run: |
+          set -e
+          for f in latest-mac.yml latest.yml; do
+            [ -f "release/$f" ] || { echo "::error::release/$f missing — one of the two builds did not upload its update metadata"; exit 1; }
+          done
+          ls release/*.dmg release/*.exe >/dev/null
+
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo mrdainami/nami \
+            --draft \
+            --title "Nami ${GITHUB_REF_NAME#v}" \
+            --notes "macOS: signed and notarized, Apple Silicon and Intel. Windows 10 and 11: installers for x64 and ARM64." \
+            release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest-mac.yml release/latest.yml

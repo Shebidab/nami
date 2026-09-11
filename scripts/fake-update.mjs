@@ -50,6 +50,17 @@ const serveApp = arg('--serve');
 const pointApp = arg('--point');
 const corrupt = process.argv.includes('--corrupt');
 
+// macOS only. Everything below reads an Info.plist, re-signs a bundle and
+// serves a zip for Squirrel.Mac — none of which exists on Windows, where the
+// updater downloads an NSIS installer and runs it. Testing that path needs its
+// own script, and this one should say so rather than fail four steps in on a
+// missing PlistBuddy.
+if (process.platform !== 'darwin') {
+  console.error('fake-update is for macOS: it serves a zip for Squirrel.Mac and re-signs a bundle.\n'
+    + 'The Windows updater installs an NSIS .exe instead, so none of this applies to it.');
+  process.exit(1);
+}
+
 if (!serveApp && !pointApp) {
   console.error('usage: node scripts/fake-update.mjs --serve <Nami.app> [--point <installed Nami.app>] [--corrupt]');
   process.exit(1);

@@ -7,6 +7,15 @@ A lean Electron desktop app: open any folder, run **any of the top agent CLIs**
 as paper tiles — 100% in the paper aesthetic of the mockup (cream sheet,
 Caveat handwriting, Courier Prime, pastel tints, hard offset shadows, dashed rules).
 
+Ships for macOS 13+ and for Windows 10 (1809+) and 11. The floor on Windows is
+ConPTY, which arrived in 1809 and is what makes a real terminal tile possible
+there at all. Everything about the two is the same app: same desk, same agents,
+same on-device dictation. What differs is named in exactly two files —
+`src/main/platform.js` for shells, paths and window chrome, and
+`src/renderer/keys.mjs` for how a shortcut is written down — and in both,
+platform is an argument rather than an ambient fact, so either column can be
+exercised from the other machine.
+
 Paper is the design language and the base stylesheet; the other three desks (operator, glass,
 graphite) are layered over it. Since 0.1.8 a **new install opens on glass** — the desk that reads
 as a current Mac app to someone who has never seen Nami — and anyone who picks a theme keeps it.

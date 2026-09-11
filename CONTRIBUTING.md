@@ -25,18 +25,46 @@ Keep them apart.
 - **`npm start`** runs this checkout. It is what you look at while working:
   no build, no wait, and Electron gives it its own `userData` (`Nami-dev`), so
   your real settings, keys and open projects are never touched.
-- **`/Applications/Nami.app`** is the version other people have. Leave it alone
-  and it stays an honest answer to "what does a user see?", which nothing else
-  can tell you.
+- **The installed Nami** — `/Applications/Nami.app`, or on Windows whatever the
+  installer put in `%LOCALAPPDATA%\Programs\Nami` — is the version other people
+  have. Leave it alone and it stays an honest answer to "what does a user see?",
+  which nothing else can tell you.
 
 Installing your own build over it is a deliberate act, not the daily loop:
 
 ```bash
-npm run pack && npm run install-local
+npm run pack && npm run install-local     # macOS
+npm run dist                              # Windows: run release\Nami-x64.exe
 ```
 
 `install-local` refuses to overwrite a running app, because doing so leaves it
-reading a bundle that no longer exists.
+reading a bundle that no longer exists. On Windows the installer does that job
+itself, so there is no script for it.
+
+## Both platforms
+
+Nami ships for macOS 13+ and for Windows 10 (1809+) and 11, and the Windows
+half is tested rather than hoped for: `npm test` runs the same suite on both,
+and the release workflow builds on a runner of each kind before either can
+become a download.
+
+Two files carry every assumption about which machine this is:
+
+- **`src/main/platform.js`** — shells, PATH, where each agent's binary lands,
+  window chrome, how a zip is opened. Pure, and platform is always an argument,
+  so a test can ask what the *other* machine would do.
+- **`src/renderer/keys.mjs`** — how a shortcut is written down. ⌘K on a Mac and
+  Ctrl+K on a PC, in each platform's own modifier order, plus Finder/Explorer
+  and "this Mac"/"this PC". Call sites pass tokens (`kbd('shift', 'mod', 'N')`),
+  never glyphs.
+
+If you find yourself typing `/` into a path, `⌘` into a string, or `process.
+platform` into a third file, one of those two is where it belongs.
+
+Tests say which platform they mean rather than inheriting the one they run on.
+`tests/paths.mjs` gives a fixture an absolute path without spelling one —
+`abs('proj')` is `/proj` on a Mac and `C:\proj` on Windows — so an assertion is
+about behaviour instead of punctuation.
 
 Building a `.app` or `.dmg` (`npm run pack` / `npm run dist`) first runs
 `npm run fetch-model`, which pulls `whisper-tiny.en` (~44 MB) into `build/models`
@@ -65,10 +93,13 @@ restart restores the desk.
 - **Sessions survive restarts** — editors and viewers reopen, terminals
   restart in their folder, and Claude sessions pick their conversation back up
   via `claude --resume` of the pinned id.
-- **The launcher** (⌘N) shows the agents actually installed on your Mac, checked
-  through your own shell at startup: Claude Code, Codex, OpenCode, Gemini CLI,
+- **The launcher** (⌘N / Ctrl+N) shows the agents actually installed on this
+  machine, checked through your own shell — or, on Windows, the registry — at
+  startup: Claude Code, Codex, OpenCode, Gemini CLI,
   Hermes, Kimi Code. Missing ones open a guided setup sheet with the verified
-  official install command, run for you inside a terminal tile.
+  official install command for the platform you are on — a `curl … | bash` line
+  on a Mac, the vendor's own PowerShell installer on Windows — run for you
+  inside a terminal tile.
 - **Library** — the third rail tab, grouped into Agents / Skills / Services /
   Plugins, reading this project's `.claude/` and `.opencode/`, your user-level
   `~/.claude/` and `~/.config/opencode/`, and installed Claude plugins. Each item
@@ -88,23 +119,25 @@ restart restores the desk.
 
 ## Auth
 
-Nami uses your logged-in `claude` (subscription), found at `~/.local/bin/claude`.
-No API key is set. If your `claude` lives elsewhere, set
-`CLAUDE_CODE_EXECUTABLE=/path/to/claude`.
+Nami uses your logged-in `claude` (subscription), found at `~/.local/bin/claude`
+— on Windows, `%USERPROFILE%\.local\bin\claude.exe`, which is where the official
+`irm https://claude.ai/install.ps1 | iex` installer puts it. No API key is set.
+If your `claude` lives elsewhere, set `CLAUDE_CODE_EXECUTABLE` to its path.
 
 ## Settings
 
 ⌘, or the ⚙ in the topbar. **Voice** picks how Nami hears you, **Look** switches
 desks, **Models** configures the OpenAI-compatible endpoint behind "any AI model"
 sessions. Everything lands in `settings.json` under the app's userData, on that
-Mac only — nothing syncs. API keys typed there beat `OPENAI_API_KEY` /
+machine only — nothing syncs. API keys typed there beat `OPENAI_API_KEY` /
 `ELEVENLABS_API_KEY` from the shell; a key that came from the environment is
 shown as read-only.
 
 ## Keys
 
 ⌘N new session · ⌘O open folder · ⌘K agents · ⌘W close pane · ⌘S save ·
-⌘, settings · esc close
+⌘, settings · esc close. On Windows, Ctrl for each of them — the app shows
+whichever is true where it is running.
 
 ## Design
 
@@ -121,14 +154,20 @@ Tagging a version is the only thing that produces an installer:
 npm version patch && git push --follow-tags
 ```
 
-That builds from a clean checkout, signs and notarises, and creates a **draft**
-release. Publishing it is a deliberate human step — the moment it goes live is
-the moment every installed Nami starts offering it.
+That builds from two clean checkouts — one macOS runner, one Windows — signs
+and notarises the Mac half, and creates a single **draft** release carrying
+both. Publishing it is a deliberate human step: the moment it goes live is the
+moment every installed Nami starts offering it. If either platform's build
+fails there is no release at all, because half a release is worse than none —
+the half that exists is the half people download.
 
-Each release carries two Mac builds of each architecture. The `.dmg` is what a
-person downloads; the `.zip` is what an update installs, because on macOS the
-swap is done by Squirrel, which can only unpack a zip. A release with no zip on
-it is a release nothing can update to.
+Each release carries four installers. On macOS the `.dmg` is what a person
+downloads and the `.zip` is what an update installs, because the swap is done by
+Squirrel, which can only unpack a zip — a release with no zip on it is a release
+nothing can update to. On Windows one NSIS `.exe` per architecture does both
+jobs, and `scripts/fix-update-metadata.mjs` deletes the third installer
+electron-builder makes (a 291 MB one carrying both architectures) before it can
+be uploaded or updated from.
 
 ## Testing an update without publishing one
 

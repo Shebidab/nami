@@ -38,12 +38,23 @@ files:
   - '!**/*.map'
 
   # --- weight, in descending order of how much it saves -------------------
-  # 170 MB: the ORT tarball carries every platform. win32 + linux is DirectML and
-  # CUDA that a Mac build can never load.
-  - '!node_modules/onnxruntime-node/bin/napi-v3/win32/**'
-  - '!node_modules/onnxruntime-node/bin/napi-v3/linux/**'
-  # 34 MB: and of the two Mac slices, keep only the one being built.
-  - '!node_modules/onnxruntime-node/bin/napi-v3/darwin/!(${arch})/**'
+  # The ORT tarball carries every platform — darwin, linux and win32, two
+  # architectures each, 209 MB in total. A build can load exactly one of those
+  # directories; everything else is weight the user downloads and never opens.
+  #
+  # ${platform} and ${arch}, and ${platform} specifically: the macro that reads
+  # more naturally here, ${os}, belongs to artifactName and is NOT substituted in
+  # a file pattern. It does not fail — `!(${os})` simply matches all three
+  # directories, and the packaged app ships with no ORT binary at all. It
+  # launches. Dictation is dead, on a code path no test exercises, and the only
+  # visible sign is the app being 65 MB lighter than it ought to be. ${platform}
+  # gives darwin / win32 / linux, which is exactly how these are named.
+  #
+  # Written as "keep mine, drop the rest" so an architecture or an operating
+  # system nobody thought of is excluded by default instead of shipped by
+  # accident.
+  - '!node_modules/onnxruntime-node/bin/napi-v3/!(${platform})/**'
+  - '!node_modules/onnxruntime-node/bin/napi-v3/${platform}/!(${arch})/**'
 
   # 68 MB: transformers declares onnxruntime-web as a hard dependency, but the
   # build we actually load (dist/transformers.node.mjs) imports only node:*,
@@ -68,6 +79,12 @@ asarUnpack:
   - '**/node_modules/onnxruntime-node/bin/**'
   - '**/node_modules/@lydell/node-pty/**'
   - '**/*.node'
+
+# Neither afterAllArtifactBuild nor the dmg block below does anything on a
+# Windows build: the hook returns immediately when the build produced no dmg,
+# and `dmg:` is simply not consulted. Left unguarded on purpose — a config that
+# describes each target and lets the other one ignore it stays readable, where
+# a platform conditional wrapped around half this file would not.
 
 # The dmg is what the user downloads, so it is what carries the quarantine flag
 # and what Gatekeeper judges first. electron-builder signs the app and leaves the
@@ -130,3 +147,62 @@ mac:
     NSMicrophoneUsageDescription: >-
       Nami uses your microphone so you can dictate into a session instead of
       typing.
+
+win:
+  # NSIS is what a Windows user means by "an installer": one .exe, a Start menu
+  # entry, an uninstaller in Apps & features, and an entry point electron-updater
+  # can replace in place. A portable build was considered and rejected — the
+  # updater cannot swap a file the user is running out of their Downloads
+  # folder, so it would ship a Nami that can never update itself.
+  #
+  # Both architectures. Windows on ARM runs an x64 build under emulation, and it
+  # runs it badly: the terminal is the point of Nami and ConPTY under emulation
+  # is where that shows. An arm64 build is a few minutes of CI and the whole
+  # difference on a Surface or a Dev Kit.
+  #
+  # Asking for two architectures gets three installers: one per arch, plus a
+  # 291 MB one carrying both, named Nami.exe. Nothing configures that away —
+  # separate target entries produce it too. Nobody should download it, and
+  # nothing should update from it, so scripts/fix-update-metadata.mjs deletes it
+  # and takes it out of latest.yml once the build has finished. The release step
+  # uploads Nami-*.exe, which never matched it in the first place.
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  icon: build/icon.png     # electron-builder renders the .ico from this
+  # Same list as the Mac's fileAssociations and for the same reasons: Nami is
+  # offered as an option in "Open with", it never takes a default, and the list
+  # stays short because appearing under every file in Explorer is noise.
+  # Keep in step with OPEN_EXT in src/main/open-with.js.
+  fileAssociations:
+    - ext: [md, markdown, mdx]
+      name: Markdown document
+      description: Markdown document
+    - ext: [txt, text]
+      name: Plain text document
+      description: Plain text document
+
+nsis:
+  # Per-user, and not negotiable. A machine-wide install needs elevation, which
+  # means a UAC prompt before anyone has seen the app — and, worse, it means
+  # every later auto-update needs one too. electron-updater installs silently in
+  # the background; an update that stops to ask for administrator rights is an
+  # update that never happens.
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  # Let people choose the folder. Nami is a workbench, and the sort of person
+  # who installs one has opinions about where programs go.
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: false      # nobody asked for another desktop icon
+  createStartMenuShortcut: true
+  shortcutName: Nami
+  # The uninstaller leaves userData alone by default, which is right: settings,
+  # keys and the desk you left open are the user's, and a reinstall should find
+  # them. deleteAppDataOnUninstall stays false, deliberately and by omission of
+  # nothing — it is written out so the decision is visible.
+  deleteAppDataOnUninstall: false
+  # Differential updates. electron-updater downloads only the changed blocks
+  # between two versions when both carry a blockmap, which turns a ~120 MB
+  # update into a few megabytes for anyone who is one release behind.
+  differentialPackage: true

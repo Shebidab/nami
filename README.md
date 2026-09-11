@@ -7,9 +7,11 @@
 One workspace for all of them. Say what you need in plain English and watch it get done.
 
 **[↓ Download for Mac](https://github.com/mrdainami/nami/releases/latest/download/Nami-arm64.dmg)**
+ · **[↓ Download for Windows](https://github.com/mrdainami/nami/releases/latest/download/Nami-x64.exe)**
 
-macOS 13 or later · free and open source
+macOS 13 or later · Windows 10 and 11 · free and open source
 On an older Intel Mac? [Get the Intel build](https://github.com/mrdainami/nami/releases/latest/download/Nami-x64.dmg).
+On a Windows ARM machine? [Get the ARM64 build](https://github.com/mrdainami/nami/releases/latest/download/Nami-arm64.exe).
 
 </div>
 
@@ -22,9 +24,9 @@ On an older Intel Mac? [Get the Intel build](https://github.com/mrdainami/nami/r
 
 ## What it is
 
-Nami is a desk for AI agents. You open one folder on your Mac, ask for something
-in plain English, and an agent gets to work in its own pane — while three others
-do something else beside it.
+Nami is a desk for AI agents. You open one folder on your computer, ask for
+something in plain English, and an agent gets to work in its own pane — while
+three others do something else beside it.
 
 Nothing happens behind your back.
 
@@ -63,23 +65,29 @@ run. Same for skills and connections. Notion, Gmail and Slack connect in one cli
   </tr>
 </table>
 
-## Your files never leave your Mac
+## Your files never leave your machine
 
 Nami only ever looks inside the one folder you point it at. Dictation runs on
 your own machine, so it works on a fresh install with no account, no key and no
-network. Every build is signed and notarised by Apple, so it opens without a
+network. Mac builds are signed and notarised by Apple, so they open without a
 security warning.
 
 ## Get started
 
-1. **[Download it](https://github.com/mrdainami/nami/releases/latest/download/Nami-arm64.dmg)** and drag Nami into your Applications folder.
+1. **Download it** — [Mac](https://github.com/mrdainami/nami/releases/latest/download/Nami-arm64.dmg)
+   (drag Nami into Applications) or
+   [Windows](https://github.com/mrdainami/nami/releases/latest/download/Nami-x64.exe)
+   (run the installer; it installs for you alone and needs no administrator).
 2. **Point it at one folder** you work in. It never looks outside it.
 3. **Ask for something.** It finds the agents you already have.
 
-Find your way around with **⌘ Shortcuts** in the app, or read the
-[shortcuts and gestures reference](docs/shortcuts.md).
+Find your way around with **Shortcuts** at the bottom right of the app, or read
+the [shortcuts and gestures reference](docs/shortcuts.md).
 
-Windows is coming.
+On Windows, Nami runs your agents in PowerShell through ConPTY, which is why
+Windows 10 version 1809 is the floor. Everything else is the same app: the same
+desk, the same agents, the same on-device dictation with no account and no
+network.
 
 ## Build it yourself
 
@@ -100,8 +108,8 @@ Made by [Cal](https://dainami.ai/links?utm_source=github&utm_medium=readme) —
 and made **in Nami**. Every release on this page was built in the app you are
 looking at.
 
-**Want Nami for your team?** Custom builds, Windows, or Nami wired into your
-own stack — [dainami.ai](https://dainami.ai/?utm_source=github&utm_medium=readme&utm_campaign=teams)
+**Want Nami for your team?** Custom builds, managed deployment, or Nami wired
+into your own stack — [dainami.ai](https://dainami.ai/?utm_source=github&utm_medium=readme&utm_campaign=teams)
 or [cal@dainami.ai](mailto:cal@dainami.ai).
 
 MIT licensed · [nami.dainami.ai](https://nami.dainami.ai) ·

@@ -17,6 +17,18 @@ const target = '/Applications/Nami.app';
 
 function die(msg) { console.error(msg); process.exit(1); }
 
+// macOS only, and it says so rather than failing at the first Mac-shaped tool
+// it reaches for. Windows has no equivalent worth writing: an installed Nami
+// there is whatever NSIS put in %LOCALAPPDATA%\Programs, and the way to replace
+// it is to run the installer the build just made — which already refuses to
+// overwrite a running app, because that is the installer's job rather than a
+// script's.
+if (process.platform !== 'darwin') {
+  die('install-local is for macOS.\n\n'
+    + 'On Windows, `npm run dist` writes release\\Nami-x64.exe — run that.\n'
+    + 'It installs per-user, needs no administrator, and replaces the copy you have.');
+}
+
 if (!fs.existsSync(built)) die(`No build at ${path.relative(root, built)} — run \`npm run pack\` first.`);
 
 // ps over pgrep: pgrep -f patterns are easy to get subtly wrong, and a false
