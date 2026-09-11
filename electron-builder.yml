@@ -60,6 +60,23 @@ files:
   - '!node_modules/onnxruntime-node/bin/napi-v3/!(${platform})/**'
   - '!node_modules/onnxruntime-node/bin/napi-v3/${platform}/!(${arch})/**'
 
+  # node-pty and sharp do it the other way round: one npm PACKAGE per
+  # architecture, pulled in as an optional dependency. That difference is the
+  # whole problem — `npm install` fetches only the package matching the machine
+  # it runs on, so cross-building arm64 from an x64 runner produced a bundle
+  # with an x64 node-pty in it. It packaged, installed and launched, and every
+  # terminal tile would have said "[node-pty unavailable]" on the one
+  # architecture nobody here can test by hand.
+  #
+  # Two halves to the fix, and both are needed. CI installs the other
+  # architecture's packages before building (--force, because npm refuses a cpu
+  # that is not its own), and these lines keep each build to its own. The half
+  # that catches the next version of this is neither: scripts/check-bundle.mjs
+  # reads the PE header of every shipped binary, because a directory named
+  # win32-arm64 is not evidence that what is inside it is.
+  - '!node_modules/@lydell/node-pty-*-!(${arch})/**'
+  - '!node_modules/@img/sharp-*-!(${arch})/**'
+
   # 68 MB: transformers declares onnxruntime-web as a hard dependency, but the
   # build we actually load (dist/transformers.node.mjs) imports only node:*,
   # onnxruntime-common, onnxruntime-node and sharp. Nothing reaches for -web.

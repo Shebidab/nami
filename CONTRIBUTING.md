@@ -41,6 +41,24 @@ npm run dist                              # Windows: run release\Nami-x64.exe
 reading a bundle that no longer exists. On Windows the installer does that job
 itself, so there is no script for it.
 
+## Building for the other architecture
+
+node-pty and sharp ship one npm package per architecture, behind an optional
+dependency, so `npm install` fetches only the one matching the machine you are
+on. Cross-build without the other and the bundle carries the wrong native
+binary: it packages, installs and launches, and every terminal tile comes up
+`[node-pty unavailable]`. Before building arm64 from an x64 machine:
+
+```bash
+npm install --no-save --force @lydell/node-pty-win32-arm64 @img/sharp-win32-arm64
+```
+
+`--force` because npm refuses to install a cpu that is not its own, which is
+what cross-building is. You should not have to remember this — `npm run
+check-bundle` reads the PE header of every shipped binary and fails the build
+if one is for the wrong machine, because a directory named `win32-arm64` is not
+evidence that what is inside it is.
+
 ## Both platforms
 
 Nami ships for macOS 13+ and for Windows 10 (1809+) and 11, and the Windows

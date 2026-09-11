@@ -53,6 +53,95 @@ function bundles() {
   return found;
 }
 
+// ---- and that every binary in it is for the machine it will run on ---------
+//
+// This exists because the arm64 Windows build shipped an x64 node-pty, and
+// nothing said so. The app packaged, installed and launched; every terminal
+// tile would have come up "[node-pty unavailable — terminal disabled]", which
+// is the whole product, on the one architecture nobody here can test by hand.
+//
+// The cause is not a glob. node-pty and sharp deliver their binaries as
+// per-architecture npm packages behind optional dependencies, so `npm install`
+// on an x64 machine fetches the x64 one and nothing else — and electron-builder
+// can only package what is on disk. Cross-building arm64 therefore produces a
+// bundle with a hole in it, silently, on any CI runner in the world.
+//
+// Reading the header is the only check that cannot be fooled by a filename:
+// @lydell/node-pty-win32-x64 is a directory name, and a directory name is not
+// evidence of anything.
+
+// PE (Windows): 'MZ', then a pointer at 0x3c to 'PE\0\0' + a 2-byte machine.
+const PE_MACHINE = { 0x8664: 'x64', 0xaa64: 'arm64', 0x14c: 'ia32' };
+// Mach-O (macOS) 64-bit, and the fat wrapper that carries several at once.
+const MACHO_CPU = { 0x01000007: 'x64', 0x0100000c: 'arm64' };
+
+function binaryArch(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const head = Buffer.alloc(64);
+    if (fs.readSync(fd, head, 0, 64, 0) < 64) return 'unreadable';
+
+    if (head.readUInt16LE(0) === 0x5a4d) {                 // 'MZ'
+      const pe = head.readUInt32LE(0x3c);
+      const coff = Buffer.alloc(6);
+      fs.readSync(fd, coff, 0, 6, pe);
+      if (coff.readUInt32LE(0) !== 0x00004550) return 'not-a-pe';   // 'PE\0\0'
+      return PE_MACHINE[coff.readUInt16LE(4)] || 'unknown';
+    }
+    const magic = head.readUInt32BE(0);
+    if (magic === 0xcafebabe || magic === 0xcafebabf) return 'universal';
+    if (magic === 0xcffaedfe || magic === 0xcefaedfe) {     // little-endian Mach-O
+      return MACHO_CPU[head.readUInt32LE(4)] || 'unknown';
+    }
+    return 'unknown';
+  } catch (_) {
+    return 'unreadable';
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch (_) {}
+  }
+}
+
+// The architecture electron-builder named this output directory for. It leaves
+// the commonest one bare — release/win-unpacked and release/mac — which is the
+// same convention artifactName follows, and x64 is what bare means.
+function archOf(directory) {
+  const m = /-(arm64|x64|ia32)(?:-unpacked)?$/.exec(directory);
+  return m ? m[1] : 'x64';
+}
+
+function nativeFiles(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) return nativeFiles(full);
+    return /\.(node|dll|dylib|so)$/i.test(e.name) ? [full] : [];
+  });
+}
+
+function checkNativeArch(asarFile, directory) {
+  const want = archOf(directory);
+  const unpacked = asarFile + '.unpacked';
+  const files = nativeFiles(unpacked);
+  if (!files.length) {
+    console.log(`   ok    no native binaries to check`);
+    return 0;
+  }
+  // 'universal' is a fat Mach-O carrying this arch among others, which is fine.
+  const wrong = files
+    .map((f) => [path.relative(unpacked, f), binaryArch(f)])
+    .filter(([, got]) => got !== want && got !== 'universal');
+
+  if (wrong.length) {
+    console.error(`   FAIL  ${wrong.length} of ${files.length} native binaries are not ${want}:`);
+    for (const [rel, got] of wrong) console.error(`           ${got.padEnd(10)} ${rel}`);
+    console.error('         a per-arch npm package is missing for this target — see the note above');
+    return 1;
+  }
+  console.log(`   ok    all ${files.length} native binaries are ${want}`);
+  return 0;
+}
+
 const found = bundles();
 if (!found.length) {
   console.error('No packaged app under release/. Run `npm run pack` first.');
@@ -93,6 +182,8 @@ for (const file of found) {
   if (missing.length) { console.error(`   FAIL  the app cannot run without: ${missing.join(', ')}`); bad++; }
 
   if (!strays.length && !named.length && !missing.length) console.log('   ok    only what it needs to run');
+
+  bad += checkNativeArch(file, arch);
 }
 
 if (bad) {

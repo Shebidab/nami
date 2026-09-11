@@ -225,6 +225,19 @@ jobs:
             echo "signing certificate present"
           fi
 
+      # node-pty and sharp ship one npm package per architecture behind an
+      # optional dependency, so `npm ci` on an x64 runner fetches the x64 one
+      # and nothing else — and a cross-built arm64 bundle then carries an x64
+      # node-pty. It packages, installs and launches; every terminal tile comes
+      # up "[node-pty unavailable]" on the one architecture nobody can test by
+      # hand. --force because npm refuses to install a cpu that is not its own,
+      # which is exactly what cross-building means.
+      #
+      # check-bundle reads the PE header of every shipped binary afterwards, so
+      # if this step ever stops working the build fails instead of shipping.
+      - name: Fetch the other architecture's native packages
+        run: npm install --no-save --no-audit --no-fund --force @lydell/node-pty-win32-arm64 @img/sharp-win32-arm64
+
       - name: Build the installers
         env:
           # electron-builder reads these two for Authenticode signing; with
@@ -334,9 +347,18 @@ jobs:
           if ls release/*.dmg >/dev/null 2>&1; then
             notes="macOS: signed and notarized, Apple Silicon and Intel. $notes"
           fi
+          # Collected, not listed. A literal filename that is not there is not a
+          # glob nullglob can drop — gh takes it as an asset it cannot find and
+          # exits 1, which is how the first Windows-only release failed after
+          # building perfectly: "no matches found for release/latest-mac.yml".
+          assets=()
+          for f in release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest-mac.yml release/latest.yml; do
+            [ -f "$f" ] && assets+=("$f")
+          done
+          echo "uploading ${#assets[@]} files"
           gh release create "${GITHUB_REF_NAME}" \
             --repo Shebidab/nami \
             --draft \
             --title "Nami for Windows ${GITHUB_REF_NAME#v}" \
             --notes "$notes" \
-            release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest-mac.yml release/latest.yml
+            "${assets[@]}"
