@@ -172,6 +172,24 @@ Tagging a version is the only thing that produces an installer:
 npm version patch && git push --follow-tags
 ```
 
+### Versions on this fork
+
+This fork does not run `npm version`. The version in `package.json` is the
+upstream version it is built from, so Nami for Windows 0.5.1 is Cal's 0.5.1 and
+nothing else. A port fix between upstream releases keeps that number and is
+tagged with a build suffix:
+
+```bash
+git tag -a v0.5.1-win.3 -m "…" && git push origin v0.5.1-win.3
+```
+
+The price is stated rather than hidden: semver has no way to say "the same
+0.5.1, but newer" — `0.5.1-win.3` is a pre-release and sorts *below* 0.5.1, and
+`0.5.1+win.3` is build metadata and compares *equal* — so an installed copy is
+not offered a port fix. It is offered the next upstream version, as usual. The
+alternative, bumping the patch for port fixes, collides with upstream the first
+time Cal ships the same number.
+
 That builds from two clean checkouts — one macOS runner, one Windows — signs
 and notarises the Mac half, and creates a single **draft** release carrying
 both. Publishing it is a deliberate human step: the moment it goes live is the
