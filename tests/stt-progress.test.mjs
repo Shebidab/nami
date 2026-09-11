@@ -2,9 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import store from '../src/main/stt-model.js';
+import { abs } from './paths.mjs';
 
 const { MODEL_FILES, ensureModel } = store;
 const REPO = 'onnx-community/whisper-tiny.en';
+import { join, sep } from 'node:path';
+// Where a model file lands, addressed the way stt-model.js addresses it — it
+// joins with path.join, so on Windows the repo id's own slashes become
+// separators too and a hand-built '/m/…' string matches nothing.
+const modelPath = (rel) => join(abs('m'), REPO, rel);
 
 // The bug this file exists to prevent: the downloader counts FILES and the
 // screen printed MEGABYTES. `total: 7` went through `Math.round(7 / 1e6)` and
@@ -19,7 +25,7 @@ function memIo(present = []) {
     mkdir: () => {},
     write: (p) => { files.add(p); },
     rename: (a, b) => { files.delete(a); files.add(b); },
-    remove: (p) => { for (const f of [...files]) if (f === p || f.startsWith(p + '/')) files.delete(f); },
+    remove: (p) => { for (const f of [...files]) if (f === p || f.startsWith(p + sep)) files.delete(f); },
   };
 }
 const okFetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
@@ -28,7 +34,7 @@ const okFetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffe
 
 test('every download event counts files, and counts them up to the total', async () => {
   const io = memIo(), seen = [];
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: okFetch, io, onProgress: (p) => seen.push(p) });
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: okFetch, io, onProgress: (p) => seen.push(p) });
 
   assert.equal(seen.length, MODEL_FILES.length, 'one event per file fetched');
   for (const ev of seen) {
@@ -43,9 +49,9 @@ test('every download event counts files, and counts them up to the total', async
 
 test('a half-finished folder counts only what is left to fetch', async () => {
   // two files already landed from an interrupted run
-  const done = MODEL_FILES.slice(0, 2).map((f) => `/m/${REPO}/${f}`);
+  const done = MODEL_FILES.slice(0, 2).map((f) => modelPath(f));
   const io = memIo(done), seen = [];
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: okFetch, io, onProgress: (p) => seen.push(p) });
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: okFetch, io, onProgress: (p) => seen.push(p) });
 
   const left = MODEL_FILES.length - 2;
   assert.equal(seen.length, left);
@@ -96,7 +102,7 @@ test('nothing to say leaves the note alone', () => {
 test('a real run of events reads as a countdown a person can follow', async () => {
   const io = memIo(), lines = [];
   await ensureModel({
-    dir: '/m', repo: REPO, fetchImpl: okFetch, io,
+    dir: abs('m'), repo: REPO, fetchImpl: okFetch, io,
     onProgress: (p) => lines.push(dlProgressText(p)),
   });
   lines.push(dlProgressText({ phase: 'load' }));

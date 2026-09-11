@@ -65,13 +65,13 @@ function forgetBins() { bins.clear(); }
 // spawn walked a hardcoded list of five paths. The list stays as the floor:
 // it answers before the first scan lands, and on a machine where the shell
 // probe fails entirely.
-function resolveClaudeExecutable({ home = os.homedir(), env = process.env, exists, detected } = {}) {
+function resolveClaudeExecutable({ home = os.homedir(), env = process.env, exists, detected, platform = process.platform } = {}) {
   const there = exists || ((p) => fs.existsSync(p));
   const scanned = detected === undefined ? knownBin('claude') : detected;
   const candidates = [
     env.CLAUDE_CODE_EXECUTABLE,
     scanned,
-    ...claudeCandidates({ home, env }),
+    ...claudeCandidates({ home, env, platform }),
   ];
   for (const c of candidates) {
     try { if (c && there(c)) return c; } catch (_) {}
@@ -85,14 +85,35 @@ function resolveClaudeExecutable({ home = os.homedir(), env = process.env, exist
 // command-not-found in a tile while the launcher says ready. When the scan
 // already knows where the binary lives, the command is typed by that
 // absolute path instead. Anything the scan doesn't know passes untouched.
-function resolveRunCommand(command) {
+// Quoting the head of a typed command line, in the dialect of the shell that
+// will read it.
+//
+// On Unix: single quotes, which expand nothing; the one character they cannot
+// carry is a single quote, hence close-escape-reopen.
+//
+// On Windows this is not a quoting question at all, and treating it as one is
+// how the port first broke. Every scanned Windows path has backslashes in it,
+// so every one of them looked like it "needed quoting" — and a quoted string
+// at the head of a PowerShell line is not a command, it is a string literal:
+// `'C:\Users\x\AppData\Roaming\npm\codex.cmd' resume t` printed the path and
+// then failed on the rest of the line. The call operator `&` is what tells
+// PowerShell to run the thing, and it is needed exactly when quoting is —
+// which is nearly always here, because of the `C:\`. PowerShell escapes a
+// single quote by doubling it.
+function quoteHead(found, platform = process.platform) {
+  if (platform === 'win32') {
+    return /^[\w.-]+$/.test(found) ? found : `& '${found.replace(/'/g, "''")}'`;
+  }
+  return /[^\w@%+=:,./-]/.test(found) ? `'${found.replace(/'/g, `'\\''`)}'` : found;
+}
+
+function resolveRunCommand(command, platform = process.platform) {
   const s = String(command || '');
   const m = /^([A-Za-z][\w.-]*)(\s[\s\S]*)?$/.exec(s);
   if (!m) return s;
   const found = knownBin(m[1]);
   if (!found || found === m[1]) return s;
-  const head = /[^\w@%+=:,./-]/.test(found) ? `'${found.replace(/'/g, `'\\''`)}'` : found;
-  return head + (m[2] || '');
+  return quoteHead(found, platform) + (m[2] || '');
 }
 
 // Chat (and anything else that spawn()s a program, not a shell line) needs
@@ -139,4 +160,4 @@ function withSpawnFlags(command) {
   return missing.length ? m[1] + ' ' + missing.join(' ') + tail : s;
 }
 
-module.exports = { rememberBins, knownBin, forgetBins, resolveClaudeExecutable, resolveRunCommand, resolveSpawnProgram, withSpawnFlags, SPAWN_FLAGS };
+module.exports = { rememberBins, knownBin, forgetBins, resolveClaudeExecutable, resolveRunCommand, resolveSpawnProgram, withSpawnFlags, quoteHead, SPAWN_FLAGS };

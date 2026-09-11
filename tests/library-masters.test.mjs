@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+const { join } = path;   // a path suffix is segments, not a string with slashes in it
 import { createRequire } from 'node:module';
 import { scanLibrary, createItem } from '../src/main/library.js';
 const require = createRequire(import.meta.url);
@@ -26,7 +27,7 @@ test('a delivered master is one row — the master — never six', () => {
   const rows = items.filter((i) => i.type === 'agent' && i.slug === 'release-scribe');
   assert.equal(rows.length, 1);
   assert.equal(rows[0].platform, 'project');
-  assert.match(rows[0].filePath, /agents\/release-scribe\.md$/);
+  assert.ok(rows[0].filePath.endsWith(join('agents', 'release-scribe.md')), rows[0].filePath);
 });
 
 test('the copies really landed, marker and all', () => {
@@ -47,7 +48,7 @@ test('a hand-made platform agent still shows, on its own platform', () => {
 test('createItem writes a neutral master for platform project', () => {
   const res = createItem({ projectPath: project, homeDir: home, type: 'agent', platform: 'project', scope: 'project', name: 'Fact Checker' });
   assert.equal(res.ok, true);
-  assert.match(res.filePath, /agents\/fact-checker\.md$/);
+  assert.ok(res.filePath.endsWith(join('agents', 'fact-checker.md')), res.filePath);
   const text = fs.readFileSync(res.filePath, 'utf8');
   assert.match(text, /name: fact-checker/);
   assert.ok(!text.includes('made by Nami'), 'a master is nobody\'s copy');

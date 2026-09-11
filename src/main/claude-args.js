@@ -35,11 +35,16 @@ function projectSlug(cwd) {
 // backtick, no glob, no history bang. The one character single quotes cannot
 // carry is a single quote, which is why it is closed, escaped and reopened.
 // A session named "Cal's export button" is an ordinary thing to have.
-function shellQuote(arg) {
+function shellQuote(arg, platform = process.platform) {
   const s = String(arg == null ? '' : arg);
-  if (s === '') return "''";
+  if (s === '') return platform === 'win32' ? "''" : "''";
   // plain enough to need nothing — keeps the common command readable in the tile
   if (/^[A-Za-z0-9_\-./:=@]+$/.test(s)) return s;
+  // PowerShell knows no backslash escape inside a single-quoted string, so the
+  // quote is doubled rather than closed and reopened. Nothing else changes:
+  // single quotes are literal in both shells, which is the whole point of
+  // using them for a sentence somebody typed.
+  if (platform === 'win32') return "'" + s.replace(/'/g, "''") + "'";
   return "'" + s.replace(/'/g, `'\\''`) + "'";
 }
 

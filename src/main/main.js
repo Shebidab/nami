@@ -19,7 +19,7 @@ const { startSeedGate } = require('./seed-gate');
 const { readLiveSession, liveSessionChanged } = require('./session-registry');
 const { stripInheritedClaude } = require('./session-env');
 const { detectAgents, agentStatus, findOnDisk } = require('./agents-detect');
-const { handles: opensHere, chooseTarget } = require('./open-with');
+const { handles: opensHere, chooseTarget, filesFromArgv } = require('./open-with');
 const { planRemoval, removeAgent } = require('./agent-remove');
 const { KNOWN_SERVICES, serviceById } = require('./services-catalog');
 const { upsertMcpJson, upsertOpencode, removeService, detectServices, knownFiles } = require('./mcp-config');
@@ -36,7 +36,7 @@ const { fmtSize, listDirectory, readTree } = require('./workspace-tree');
 const { ptyCwd } = require('./pty-cwd');
 const settingsStore = require('./settings');
 const { migrateRecents, sortRecents, rememberFolderIn, setPinnedIn, removeFrom } = require('./recents');
-const { windowChrome } = require('./platform');
+const { windowChrome, unzipCommand, sessionShellCandidates, binExtensions } = require('./platform');
 const { seedStartHere } = require('./start-here');
 const { userPath, refreshUserPath } = require('./user-path');
 const { exitNote } = require('./exit-note');
@@ -78,7 +78,11 @@ function installDocProtocol() {
     const file = resolveWithinRoot(parsed.root, parsed.rel);
     // null means the path escaped its folder — refuse, do not explain.
     if (!file) return new Response('not found', { status: 404 });
-    const res = await net.fetch('file://' + file.split('/').map(encodeURIComponent).join('/'));
+    // pathToFileURL, not a hand-built file:// — a Windows path has a drive
+    // letter and backslashes, and splitting it on '/' produced one encoded
+    // blob that resolved to nothing at all. Every image in a viewed document
+    // was a broken icon, with no error anywhere to say why.
+    const res = await net.fetch(pathToFileURL(file).href);
     // Re-wrap so we set our own content type and, above all, our CSP — net.fetch
     // of a file:// URL carries neither.
     return new Response(res.body, {
@@ -359,6 +363,37 @@ app.on('open-file', (e, filePath) => {
   routeOpenFile(filePath);
 });
 
+// The Windows half of the same thing. There is no open-file event: Explorer
+// puts the path on argv, so a cold start finds it there — and a double-click
+// while Nami is already running starts a second process, which the lock below
+// turns into a message to the first.
+//
+// The lock is Windows-only on purpose. macOS enforces one instance of a bundle
+// itself, and taking the lock there would break `npm start` beside an installed
+// Nami — the case CONTRIBUTING tells every contributor to set up. It is keyed
+// on userData, so a dev run (Nami-dev) and a review build (its own disposable
+// profile) never contend with the real one anyway.
+let handedOver = false;   // a second launch, whose work the first one is doing
+if (process.platform === 'win32') {
+  if (!app.requestSingleInstanceLock()) {
+    // Everything this launch was asked to do now belongs to the copy already
+    // running. Leave before a window, a state file or a pty exists — and mark
+    // it, because whenReady can still fire in the moment before the quit lands
+    // and a window created there would outlive the process it belongs to.
+    handedOver = true;
+    app.quit();
+  } else {
+    app.on('second-instance', (_e, argv) => {
+      for (const file of filesFromArgv(argv)) routeOpenFile(file);
+      const w = BrowserWindow.getFocusedWindow() || win;
+      // Even with nothing to open: someone launched Nami, and the answer to
+      // that is the window they already have, in front of them.
+      if (w && !w.isDestroyed()) { if (w.isMinimized()) w.restore(); w.focus(); }
+    });
+    coldOpens.push(...filesFromArgv(process.argv));
+  }
+}
+
 // The path from a file to a desk. chooseTarget picks the pair; this only
 // carries out what it decided. See open-with.js for the four cases.
 function routeOpenFile(filePath) {
@@ -390,6 +425,7 @@ function sendOpen(w, filePath, folder, adopt) {
 }
 
 function createWindow(folder, bounds) {
+  const bar = settingsStore.themeTitleBar(readSettings().theme);
   const w = new BrowserWindow({
     // The floor is what the layout survives, not what looks best: below 560 the
     // tile head runs out of room even with its controls dropped. Nami is often a
@@ -398,7 +434,7 @@ function createWindow(folder, bounds) {
     // at the foot of paper.css.
     width: 1360, height: 940, minWidth: 560, minHeight: 480,
     ...(bounds && Number.isFinite(bounds.width) ? bounds : {}),
-    ...windowChrome(),
+    ...windowChrome(process.platform, bar.color, bar.symbolColor),
     backgroundColor: settingsStore.themeBackground(readSettings().theme),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, plugins: true },
   });
@@ -462,6 +498,13 @@ function reapSessions(wcId) {
 }
 
 app.whenReady().then(() => {
+  if (handedOver) return;
+  // Windows groups taskbar buttons, jump lists and toasts by this id, and
+  // derives one from the exe path when nothing says otherwise — so a Nami
+  // started from source and an installed Nami sat in two taskbar groups, and
+  // neither matched the shortcut the installer had pinned. It has to match the
+  // appId in electron-builder.yml, which is what NSIS writes into the shortcut.
+  app.setAppUserModelId('ai.dainami.nami');
   loadState();
   // Before any window: the menu belongs to the app, and setting it after a
   // window exists makes the first one flash the stock menu bar.
@@ -675,11 +718,18 @@ ipcMain.handle('app:version', () => app.getVersion());
 // of writing, but a button somebody pressed should always answer.
 function appUpdatedAt() {
   try {
-    // .../Nami.app/Contents/MacOS/Nami → .../Nami.app
-    const bundle = app.isPackaged
-      ? path.resolve(app.getPath('exe'), '..', '..', '..')
-      : app.getAppPath();
-    return fs.statSync(bundle).mtime.toISOString();
+    // macOS: .../Nami.app/Contents/MacOS/Nami → .../Nami.app, the bundle whose
+    // date macOS stamps when it lands in Applications.
+    //
+    // Windows: there is no bundle, and the install directory's own date does
+    // not move on an in-place update — NSIS replaces the files inside it. The
+    // exe is what gets replaced, so the exe is what answers.
+    //
+    // Running from source there is neither, so the folder's date stands in.
+    const exe = app.getPath('exe');
+    const stamped = !app.isPackaged ? app.getAppPath()
+      : (process.platform === 'darwin' ? path.resolve(exe, '..', '..', '..') : exe);
+    return fs.statSync(stamped).mtime.toISOString();
   } catch (_) { return null; }
 }
 
@@ -838,12 +888,16 @@ ipcMain.handle('services:pickBundle', async (e) => {
   });
   if (res.canceled || !res.filePaths[0]) return null;
   const file = res.filePaths[0];
-  // A bundle is a zip; /usr/bin/unzip ships with every Mac, so no dependency.
+  // A bundle is a zip, and neither platform needs a dependency to open one:
+  // /usr/bin/unzip ships with every Mac, tar.exe (bsdtar, which reads zip) with
+  // every Windows 10 since 1803. See unzipCommand in platform.js.
   // Extract first into a scratch spot named after the file, read the manifest,
   // then settle under the manifest's own name+version.
   const tmp = path.join(os.homedir(), '.nami', 'bundles', '.unpacking-' + Date.now());
+  const unpack = unzipCommand(file, tmp);
   const unzip = await new Promise((resolve) => {
-    execFile('/usr/bin/unzip', ['-o', '-q', file, '-d', tmp], { timeout: 30000 }, (err) => resolve(err ? err.message.split('\n')[0] : null));
+    fs.mkdirSync(tmp, { recursive: true });   // tar -C refuses a directory that is not there
+    execFile(unpack.file, unpack.args, { timeout: 30000, windowsHide: true }, (err) => resolve(err ? err.message.split('\n')[0] : null));
   });
   if (unzip) return { ok: false, error: 'Could not unpack it: ' + unzip };
   try {
@@ -936,8 +990,16 @@ ipcMain.handle('url:open', (_e, url) => {
 
 // Theme lives in settings.json so the window background matches on next launch.
 ipcMain.on('theme:applied', (e, theme) => {
-  if (!wins.has(BrowserWindow.fromWebContents(e.sender))) return;
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (!wins.has(w)) return;
   windowThemes.set(e.sender.id, settingsStore.normalizeTheme(theme));
+  // Windows draws its own minimise/maximise/close buttons over our header, and
+  // no stylesheet can reach them. Without this line, switching to a dark desk
+  // left cream glyphs on a cream plate over a graphite topbar — the one part of
+  // the window that did not change colour with the rest of it.
+  if (process.platform === 'win32') {
+    try { w.setTitleBarOverlay(settingsStore.themeTitleBar(theme)); } catch (_) {}
+  }
   refreshAppMenu();
 });
 ipcMain.handle('theme:set', (_e, theme) => {
@@ -1352,6 +1414,36 @@ ipcMain.handle('stt:prepare', (e) =>
 // four directories, so an agent spawned with it cannot find node, git, or any
 // tool the user installed. A shell tile papers over this by sourcing .zshrc on
 // its way up, but anything spawned directly — claude, a harness — does not.
+// Which shell a terminal tile actually is.
+//
+// On a Mac this has one answer and always did: $SHELL, or zsh. On Windows there
+// are two real ones — PowerShell 7 (pwsh.exe), which a lot of developers
+// install, and Windows PowerShell (powershell.exe), which is in the box — and
+// preferring the better one means asking the disk, which platform.js will not
+// do. So the table gives the order and this resolves it, once, because the
+// answer cannot change while the app is running.
+//
+// A bare name is searched along PATH the way the OS would; an absolute
+// NAMI_SHELL is taken as given. Whatever happens, the last candidate is one the
+// platform guarantees, so this never returns nothing.
+let sessionShellCache = null;
+function sessionShell() {
+  if (sessionShellCache) return sessionShellCache;
+  const candidates = sessionShellCandidates();
+  const dirs = String(process.env.PATH || process.env.Path || '').split(process.platform === 'win32' ? ';' : ':').filter(Boolean);
+  for (const c of candidates) {
+    if (path.isAbsolute(c)) { if (fs.existsSync(c)) return (sessionShellCache = c); continue; }
+    for (const dir of dirs) {
+      for (const ext of binExtensions()) {
+        // path.extname, so pwsh.exe is not looked for as pwsh.exe.exe
+        const file = path.join(dir, path.extname(c) ? c : c + ext);
+        if (fs.existsSync(file)) return (sessionShellCache = c);
+      }
+    }
+  }
+  return (sessionShellCache = candidates[candidates.length - 1]);
+}
+
 function sessionEnv(path) {
   // stripInheritedClaude first: a tile is a top-level agent, and inheriting the
   // launching conversation's handles makes claude disable transcript saving.
@@ -1376,7 +1468,7 @@ ipcMain.handle('term:create', async (e, { id, cwd, cols, rows, kind, command, pr
   // settled; the await only ever bites on a session created within the first
   // second of launch.
   const envPath = await userPath();
-  const shellPath = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
+  const shellPath = sessionShell();
   const claudeExe = resolveClaudeExecutable();
 
   let file = shellPath, spawnArgs = [], afterStart = null, claudeWatch = null, echoLine = null, discoverAgent = null, storeWatch = null;

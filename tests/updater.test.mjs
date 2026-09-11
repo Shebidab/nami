@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+import { abs } from './paths.mjs';
 const { nextState, percentOf, downloadUpdate, installNow, hasStagedFile, updaterState } = require('../src/main/updater.js');
 
 // --- the states a download can be in -----------------------------------------
@@ -99,29 +100,29 @@ const stubFs = (files) => ({
 
 test('a complete staged download is found', () => {
   const io = stubFs({
-    '/c/pending/update-info.json': '{"fileName":"Nami-arm64.zip","sha512":"x"}',
-    '/c/pending/Nami-arm64.zip': 'bytes',
+    [abs('c', 'pending', 'update-info.json')]: '{"fileName":"Nami-arm64.zip","sha512":"x"}',
+    [abs('c', 'pending', 'Nami-arm64.zip')]: 'bytes',
   });
-  assert.equal(hasStagedFile('/c', io), true);
+  assert.equal(hasStagedFile(abs('c'), io), true);
 });
 
 test('info without the file it names is not a staged download', () => {
   // electron-updater empties this directory on some failures, and a note
   // pointing at a file that is gone must not read as "ready to install".
-  const io = stubFs({ '/c/pending/update-info.json': '{"fileName":"Nami-arm64.zip"}' });
-  assert.equal(hasStagedFile('/c', io), false);
+  const io = stubFs({ [abs('c', 'pending', 'update-info.json')]: '{"fileName":"Nami-arm64.zip"}' });
+  assert.equal(hasStagedFile(abs('c'), io), false);
 });
 
 test('an empty cache is not a staged download', () => {
-  assert.equal(hasStagedFile('/c', stubFs({})), false);
+  assert.equal(hasStagedFile(abs('c'), stubFs({})), false);
 });
 
 test('unreadable json is not a staged download', () => {
-  const io = stubFs({ '/c/pending/update-info.json': 'not json{' });
-  assert.equal(hasStagedFile('/c', io), false);
+  const io = stubFs({ [abs('c', 'pending', 'update-info.json')]: 'not json{' });
+  assert.equal(hasStagedFile(abs('c'), io), false);
 });
 
 test('info with no file name is not a staged download', () => {
-  const io = stubFs({ '/c/pending/update-info.json': '{"sha512":"x"}' });
-  assert.equal(hasStagedFile('/c', io), false);
+  const io = stubFs({ [abs('c', 'pending', 'update-info.json')]: '{"sha512":"x"}' });
+  assert.equal(hasStagedFile(abs('c'), io), false);
 });

@@ -1,9 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import store from '../src/main/stt-model.js';
+import { abs } from './paths.mjs';
 
 const { MODEL_FILES, MODELS, modelById, isReady, ensureModel } = store;
 const REPO = 'onnx-community/whisper-tiny.en';
+import { join, sep } from 'node:path';
+// Where a model file lands, addressed the way stt-model.js addresses it — it
+// joins with path.join, so on Windows the repo id's own slashes become
+// separators too and a hand-built '/m/…' string matches nothing.
+const modelPath = (rel) => join(abs('m'), REPO, rel);
 
 // An in-memory disk that records renames, so we can prove nothing is published
 // under its final name until it is complete.
@@ -16,7 +22,7 @@ function memIo() {
     mkdir: () => {},
     write: (p) => { files.add(p); log.push(['write', p]); },
     rename: (a, b) => { files.delete(a); files.add(b); log.push(['rename', a, b]); },
-    remove: (p) => { for (const f of [...files]) if (f === p || f.startsWith(p + '/')) files.delete(f); },
+    remove: (p) => { for (const f of [...files]) if (f === p || f.startsWith(p + sep)) files.delete(f); },
   };
 }
 function okFetch() {
@@ -31,11 +37,11 @@ function okFetch() {
 
 test('a fresh folder downloads every file the pipeline will open', async () => {
   const io = memIo(), f = okFetch();
-  const res = await ensureModel({ dir: '/m', repo: REPO, fetchImpl: f, io });
+  const res = await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: f, io });
   assert.equal(res.ok, true);
   assert.equal(res.cached, false);
   assert.equal(f.calls.length, MODEL_FILES.length);
-  assert.equal(isReady({ dir: '/m', repo: REPO, io }), true);
+  assert.equal(isReady({ dir: abs('m'), repo: REPO, io }), true);
   // and it asked huggingface for exactly the files we listed
   assert.deepEqual(
     f.calls.map((u) => u.replace(`https://huggingface.co/${REPO}/resolve/main/`, '')).sort(),
@@ -44,7 +50,7 @@ test('a fresh folder downloads every file the pipeline will open', async () => {
 
 test('every file is written as .part and renamed — never published half-written', async () => {
   const io = memIo(), f = okFetch();
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: f, io });
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: f, io });
   const writes = io.log.filter(([op]) => op === 'write').map(([, p]) => p);
   const onnx = writes.filter((p) => p.endsWith('.onnx') || p.endsWith('.json'));
   assert.equal(onnx.length, 0, 'no final path may be written to directly');
@@ -59,20 +65,20 @@ test('a fetch that fails mid-set leaves no usable model and no final file', asyn
     if (n === 3) return { ok: false, status: 503 };
     return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) };
   };
-  await assert.rejects(() => ensureModel({ dir: '/m', repo: REPO, fetchImpl: f, io }), /could not fetch/);
-  assert.equal(isReady({ dir: '/m', repo: REPO, io }), false);
+  await assert.rejects(() => ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: f, io }), /could not fetch/);
+  assert.equal(isReady({ dir: abs('m'), repo: REPO, io }), false);
   assert.equal([...io.files].some((p) => p.endsWith('.ready')), false, 'no marker on a failed run');
   assert.equal([...io.files].some((p) => p.endsWith('.part')), false, 'no stray .part left behind');
   // the file that failed must not exist at its final path
-  const failed = `/m/${REPO}/${MODEL_FILES[2]}`;
+  const failed = modelPath(MODEL_FILES[2]);
   assert.equal(io.files.has(failed), false);
 });
 
 test('a second call on a complete folder makes zero requests', async () => {
   const io = memIo();
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: okFetch(), io });
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: okFetch(), io });
   const f2 = okFetch();
-  const res = await ensureModel({ dir: '/m', repo: REPO, fetchImpl: f2, io });
+  const res = await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: f2, io });
   assert.equal(res.cached, true);
   assert.equal(f2.calls.length, 0);
 });
@@ -80,33 +86,33 @@ test('a second call on a complete folder makes zero requests', async () => {
 test('a resumed download only fetches what is still missing', async () => {
   const io = memIo();
   // pretend an earlier run got the small files down but died before the weights
-  for (const f of MODEL_FILES.slice(0, 4)) io.files.add(`/m/${REPO}/${f}`);
+  for (const f of MODEL_FILES.slice(0, 4)) io.files.add(modelPath(f));
   const f = okFetch();
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: f, io });
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: f, io });
   assert.equal(f.calls.length, MODEL_FILES.length - 4);
-  assert.equal(isReady({ dir: '/m', repo: REPO, io }), true);
+  assert.equal(isReady({ dir: abs('m'), repo: REPO, io }), true);
 });
 
 test('files without the marker are not trusted — the set is completed first', async () => {
   const io = memIo();
-  for (const f of MODEL_FILES) io.files.add(`/m/${REPO}/${f}`);
-  assert.equal(isReady({ dir: '/m', repo: REPO, io }), false, 'no marker means not ready');
+  for (const f of MODEL_FILES) io.files.add(modelPath(f));
+  assert.equal(isReady({ dir: abs('m'), repo: REPO, io }), false, 'no marker means not ready');
   const f = okFetch();
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: f, io });
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: f, io });
   assert.equal(f.calls.length, 0, 'present files are kept');
-  assert.equal(isReady({ dir: '/m', repo: REPO, io }), true, 'and the marker is written');
+  assert.equal(isReady({ dir: abs('m'), repo: REPO, io }), true, 'and the marker is written');
 });
 
 test('a marker whose files went missing does not count as ready', async () => {
   const io = memIo();
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: okFetch(), io });
-  io.files.delete(`/m/${REPO}/onnx/encoder_model_quantized.onnx`);
-  assert.equal(isReady({ dir: '/m', repo: REPO, io }), false);
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: okFetch(), io });
+  io.files.delete(modelPath('onnx/encoder_model_quantized.onnx'));
+  assert.equal(isReady({ dir: abs('m'), repo: REPO, io }), false);
 });
 
 test('progress is reported once per downloaded file and reaches the total', async () => {
   const io = memIo(), seen = [];
-  await ensureModel({ dir: '/m', repo: REPO, fetchImpl: okFetch(), io, onProgress: (p) => seen.push(p) });
+  await ensureModel({ dir: abs('m'), repo: REPO, fetchImpl: okFetch(), io, onProgress: (p) => seen.push(p) });
   assert.equal(seen.length, MODEL_FILES.length);
   assert.equal(seen[seen.length - 1].done, MODEL_FILES.length);
   assert.equal(seen[seen.length - 1].total, MODEL_FILES.length);

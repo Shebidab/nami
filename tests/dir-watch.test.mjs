@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+import { abs } from './paths.mjs';
 const { createDirWatch, IGNORE } = require('../src/main/dir-watch.js');
 
 // A stand-in for fs.watch: one recursive watcher, and the test fires events at
@@ -63,34 +64,34 @@ function harness(opts = {}) {
 
 test('watching a project opens exactly one recursive watcher', () => {
   const { w, watch } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   assert.equal(watch.opened.length, 1);
-  assert.deepEqual(watch.opened[0], { dir: '/p', recursive: true });
+  assert.deepEqual(watch.opened[0], { dir: abs('p'), recursive: true });
   assert.equal(w.count(), 1);
 });
 
 test('watching a second project closes the first', () => {
   const { w, watch } = harness();
-  w.watchRoot('/p');
-  w.watchRoot('/q');
-  assert.deepEqual(watch.closed, ['/p']);
-  assert.deepEqual(watch.opened.map((o) => o.dir), ['/p', '/q']);
+  w.watchRoot(abs('p'));
+  w.watchRoot(abs('q'));
+  assert.deepEqual(watch.closed, [abs('p')]);
+  assert.deepEqual(watch.opened.map((o) => o.dir), [abs('p'), abs('q')]);
   assert.equal(w.count(), 1, 'one project, one watcher — never two');
 });
 
 test('watching the same project twice does not churn the watcher', () => {
   const { w, watch } = harness();
-  w.watchRoot('/p');
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
+  w.watchRoot(abs('p'));
   assert.equal(watch.opened.length, 1, 'the open handle was kept');
   assert.deepEqual(watch.closed, []);
 });
 
 test('watching nothing closes what was open', () => {
   const { w, watch } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   w.watchRoot(null);
-  assert.deepEqual(watch.closed, ['/p']);
+  assert.deepEqual(watch.closed, [abs('p')]);
   assert.equal(w.count(), 0);
 });
 
@@ -100,7 +101,7 @@ test('a root that cannot be watched is reported, not thrown', () => {
     watch: () => { throw new Error('ENOENT'); },
     onChange: () => {}, setTimeoutFn: setT, clearTimeoutFn: clearT,
   });
-  const res = w.watchRoot('/gone');
+  const res = w.watchRoot(abs('gone'));
   assert.equal(res.watching, 0);
   assert.equal(res.failed, 1);
   assert.equal(w.count(), 0);
@@ -112,44 +113,44 @@ test('a root that cannot be watched is reported, not thrown', () => {
 
 test('a file at the root reports the root', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('README.md');
   advance(1000);
-  assert.deepEqual(changed, ['/p']);
+  assert.deepEqual(changed, [abs('p')]);
 });
 
 test('a file three folders down reports its own folder', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('src/ui/parts/a.js');
   advance(1000);
-  assert.deepEqual(changed, ['/p/src/ui/parts'],
+  assert.deepEqual(changed, [abs('p', 'src', 'ui', 'parts')],
     'the folder the file is in — not the root, and not the file');
 });
 
 test('a new folder one level down reports the folder holding it', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('src/components');
   advance(1000);
-  assert.deepEqual(changed, ['/p/src']);
+  assert.deepEqual(changed, [abs('p', 'src')]);
 });
 
 test('changes in different folders are reported separately', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('ui/a.js');
   watch.fire('api/b.js');
   advance(1000);
-  assert.deepEqual(changed.sort(), ['/p/api', '/p/ui']);
+  assert.deepEqual(changed.sort(), [abs('p', 'api'), abs('p', 'ui')]);
 });
 
 test('a null filename reports the root — correctness beats quiet', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire(null);
   advance(1000);
-  assert.deepEqual(changed, ['/p']);
+  assert.deepEqual(changed, [abs('p')]);
 });
 
 // ---- which files changed ----------------------------------------------------
@@ -159,30 +160,30 @@ test('a null filename reports the root — correctness beats quiet', () => {
 
 test('a flush names the file that moved, as a path the renderer can match', () => {
   const { w, watch, events, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('src/ui/parts/a.js');
   advance(1000);
-  assert.deepEqual(events, [{ dir: '/p/src/ui/parts', files: ['/p/src/ui/parts/a.js'] }],
+  assert.deepEqual(events, [{ dir: abs('p', 'src', 'ui', 'parts'), files: [abs('p', 'src', 'ui', 'parts', 'a.js')] }],
     'absolute, because that is what an open panel stores');
 });
 
 test('several files in one folder coalesce into one flush naming all of them', () => {
   const { w, watch, events, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('notes.md');
   watch.fire('todo.md');
   advance(1000);
   assert.equal(events.length, 1);
-  assert.deepEqual(events[0].files.sort(), ['/p/notes.md', '/p/todo.md']);
+  assert.deepEqual(events[0].files.sort(), [abs('p', 'notes.md'), abs('p', 'todo.md')]);
 });
 
 test('the same file written twice inside the window is named once', () => {
   const { w, watch, events, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('notes.md');
   watch.fire('notes.md');
   advance(1000);
-  assert.deepEqual(events[0].files, ['/p/notes.md'], 'a Set, not a log');
+  assert.deepEqual(events[0].files, [abs('p', 'notes.md')], 'a Set, not a log');
 });
 
 test('a null filename says "unknown" rather than naming nothing', () => {
@@ -190,15 +191,15 @@ test('a null filename says "unknown" rather than naming nothing', () => {
   // "nothing you have open changed", which is the one answer that is certainly
   // wrong — so the renderer is told to re-check every panel instead.
   const { w, watch, events, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire(null);
   advance(1000);
-  assert.deepEqual(events, [{ dir: '/p', files: null }]);
+  assert.deepEqual(events, [{ dir: abs('p'), files: null }]);
 });
 
 test('one unknown event inside a burst leaves the whole flush unknown', () => {
   const { w, watch, events, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('notes.md');
   watch.fire(null);
   watch.fire('todo.md');
@@ -209,22 +210,22 @@ test('one unknown event inside a burst leaves the whole flush unknown', () => {
 
 test('each folder carries only its own files', () => {
   const { w, watch, events, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('ui/a.js');
   watch.fire('api/b.js');
   advance(1000);
   const byDir = Object.fromEntries(events.map((e) => [e.dir, e.files]));
-  assert.deepEqual(byDir, { '/p/ui': ['/p/ui/a.js'], '/p/api': ['/p/api/b.js'] });
+  assert.deepEqual(byDir, { [abs('p', 'ui')]: [abs('p', 'ui', 'a.js')], [abs('p', 'api')]: [abs('p', 'api', 'b.js')] });
 });
 
 test('a fresh burst starts a fresh file list', () => {
   const { w, watch, events, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('a.md');
   advance(1000);
   watch.fire('b.md');
   advance(1000);
-  assert.deepEqual(events.map((e) => e.files), [['/p/a.md'], ['/p/b.md']],
+  assert.deepEqual(events.map((e) => e.files), [[abs('p', 'a.md')], [abs('p', 'b.md')]],
     'the second flush does not still carry the first one\'s file');
 });
 
@@ -232,7 +233,7 @@ test('a fresh burst starts a fresh file list', () => {
 
 test('an ignored folder anywhere in the path drops the event', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   for (const rel of [
     'node_modules/junk/n7.js',      // the case a name-only test misses
     '.git/refs/heads/master',
@@ -247,20 +248,20 @@ test('an ignored folder anywhere in the path drops the event', () => {
 
 test('a real change alongside ignored noise still lands', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('node_modules/a/b.js');
   watch.fire('.git/index');
   watch.fire('notes.md');
   advance(1000);
-  assert.deepEqual(changed, ['/p']);
+  assert.deepEqual(changed, [abs('p')]);
 });
 
 test('a folder merely starting with an ignored name is not ignored', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('distribution/plan.md');
   advance(1000);
-  assert.deepEqual(changed, ['/p/distribution'],
+  assert.deepEqual(changed, [abs('p', 'distribution')],
     'the test is on whole path segments, not on a string prefix');
 });
 
@@ -268,39 +269,39 @@ test('a folder merely starting with an ignored name is not ignored', () => {
 
 test('two events inside the window emit one change', () => {
   const { w, watch, changed, advance } = harness({ debounceMs: 200 });
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('a.txt');
   watch.fire('b.txt');
   advance(199);
   assert.deepEqual(changed, [], 'nothing before the window closes');
   advance(1);
-  assert.deepEqual(changed, ['/p'], 'coalesced into one');
+  assert.deepEqual(changed, [abs('p')], 'coalesced into one');
 });
 
 test('a steady write storm flushes at the ceiling instead of starving', () => {
   const { w, watch, changed, advance } = harness({ debounceMs: 200, maxWaitMs: 800 });
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   // An agent writing every 50ms: each event resets the trailing timer, so
   // without a ceiling the tree stays silent for as long as the agent works.
   for (let i = 0; i < 40; i++) { watch.fire('f' + i + '.txt'); advance(50); }
   assert.ok(changed.length >= 2,
     'the tree was corrected while the writing was still going on, not after');
-  assert.ok(changed.every((d) => d === '/p'));
+  assert.ok(changed.every((d) => d === abs('p')));
 });
 
 test('the ceiling fires no later than maxWaitMs after the first event', () => {
   const { w, watch, changed, advance } = harness({ debounceMs: 200, maxWaitMs: 800 });
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('a.txt');
   for (let i = 0; i < 7; i++) { advance(100); watch.fire('b' + i + '.txt'); }  // t = 700
   assert.deepEqual(changed, [], 'still inside the ceiling');
   advance(100);                                                                // t = 800
-  assert.deepEqual(changed, ['/p'], 'flushed on the ceiling, mid-storm');
+  assert.deepEqual(changed, [abs('p')], 'flushed on the ceiling, mid-storm');
 });
 
 test('after a ceiling flush the next storm gets its own ceiling', () => {
   const { w, watch, changed, advance } = harness({ debounceMs: 200, maxWaitMs: 800 });
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   for (let i = 0; i < 20; i++) { watch.fire('f' + i); advance(100); }
   advance(1000);
   assert.ok(changed.length >= 2, 'a long storm yields several corrections');
@@ -311,26 +312,26 @@ test('after a ceiling flush the next storm gets its own ceiling', () => {
 
 test('each folder keeps its own timers — a storm in one does not hold up another', () => {
   const { w, watch, changed, advance } = harness({ debounceMs: 200, maxWaitMs: 800 });
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('ui/a.js');                                         // t=0, ui ceiling at 800
   for (let t = 100; t <= 700; t += 100) { advance(100); watch.fire('ui/x' + t + '.js'); }
   assert.deepEqual(changed, [], 't=700: ui is still being written to, ceiling not yet up');
   watch.fire('api/b.js');                                        // t=700, and then quiet
   advance(100);                                                  // t=800
-  assert.deepEqual(changed, ['/p/ui'], 'ui flushed on its own ceiling, mid-storm');
+  assert.deepEqual(changed, [abs('p', 'ui')], 'ui flushed on its own ceiling, mid-storm');
   advance(100);                                                  // t=900
-  assert.deepEqual(changed, ['/p/ui', '/p/api'], 'api flushed on its own trailing window');
+  assert.deepEqual(changed, [abs('p', 'ui'), abs('p', 'api')], 'api flushed on its own trailing window');
 });
 
 // ---- teardown ---------------------------------------------------------------
 
 test('close drops the watcher and every pending flush', () => {
   const { w, watch, changed, advance } = harness();
-  w.watchRoot('/p');
+  w.watchRoot(abs('p'));
   watch.fire('a.txt');
   w.close();
   assert.equal(w.count(), 0);
-  assert.deepEqual(watch.closed, ['/p']);
+  assert.deepEqual(watch.closed, [abs('p')]);
   advance(5000);
   assert.deepEqual(changed, [], 'a pending debounce must not fire after teardown');
 });

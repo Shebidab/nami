@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { KNOWN_AGENTS, POINTER_FILE, contextFilesFor, detectAgents, pathFromShellOutput, findOnDisk } = require('../src/main/agents-detect.js');
+const { KNOWN_AGENTS, POINTER_FILE, contextFilesFor, detectAgents, pathFromShellOutput, findOnDisk, installFor } = require('../src/main/agents-detect.js');
 
 test('registry carries the curated seven with everything the launcher needs', () => {
   // gemini and cursor left the registry 2026-08-12: Google shut Gemini CLI
@@ -83,7 +83,7 @@ test('detectAgents treats empty output as not found', async () => {
 
 test('the path is picked out of a chatty rc file', () => {
   const noisy = 'nvm: using v22\nWelcome back!\n/Users/x/.opencode/bin/opencode\n';
-  assert.equal(pathFromShellOutput(noisy), '/Users/x/.opencode/bin/opencode');
+  assert.equal(pathFromShellOutput(noisy, 'darwin'), '/Users/x/.opencode/bin/opencode');
 });
 
 test('a shell that prints only a greeting reads as not installed', () => {
@@ -95,7 +95,7 @@ test('a shell that prints only a greeting reads as not installed', () => {
 test('the answer wins over an rc line that also looks like a path', () => {
   // command -v runs after every startup file, so the last path is ours
   const out = '/some/banner/path\n/opt/homebrew/bin/claude\n';
-  assert.equal(pathFromShellOutput(out), '/opt/homebrew/bin/claude');
+  assert.equal(pathFromShellOutput(out, 'darwin'), '/opt/homebrew/bin/claude');
 });
 
 test('a windows drive letter counts as a path', () => {
@@ -165,7 +165,7 @@ test('agentStatus runs the status command and parses it', async () => {
     assert.equal(cmd, 'claude auth status --json');
     return JSON.stringify({ loggedIn: true, email: 'dev@example.com', subscriptionType: 'max', authMethod: 'claude.ai' });
   };
-  const s = await agentStatus('claude', { exec, readFile: async () => null, home: '/h' });
+  const s = await agentStatus('claude', { exec, readFile: async () => null, home: '/h', platform: 'darwin' });
   assert.equal(s.id, 'claude');
   assert.equal(s.signedIn, true);
   assert.equal(s.label, 'dev@example.com · Max');
@@ -175,7 +175,7 @@ test('agentStatus runs the status command and parses it', async () => {
 test('agentStatus expands ~ and reads files for file-based agents', async () => {
   const seen = [];
   const readFile = async (p) => { seen.push(p); return p.endsWith('auth.json') ? HERMES_AUTH : null; };
-  const s = await agentStatus('hermes', { exec: async () => { throw new Error('must not exec'); }, readFile, home: '/h' });
+  const s = await agentStatus('hermes', { exec: async () => { throw new Error('must not exec'); }, readFile, home: '/h', platform: 'darwin' });
   assert.ok(seen.includes('/h/.hermes/auth.json'), 'did not expand ~');
   assert.equal(s.signedIn, true);
   assert.equal(s.label, '2 sign-ins');
@@ -183,19 +183,19 @@ test('agentStatus expands ~ and reads files for file-based agents', async () => 
 });
 
 test('agentStatus returns unknown when the status command fails', async () => {
-  const s = await agentStatus('claude', { exec: async () => { throw new Error('boom'); }, readFile: async () => null, home: '/h' });
+  const s = await agentStatus('claude', { exec: async () => { throw new Error('boom'); }, readFile: async () => null, home: '/h', platform: 'darwin' });
   assert.equal(s.signedIn, null);
   assert.deepEqual(s.rows, []);
 });
 
 test('agentStatus reads antigravity identity from its google account files', async () => {
   const readFile = async (p) => (p.endsWith('oauth_creds.json') ? '{"access_token":"x"}' : null);
-  const s = await agentStatus('antigravity', { exec: async () => { throw new Error('must not exec'); }, readFile, home: '/h' });
+  const s = await agentStatus('antigravity', { exec: async () => { throw new Error('must not exec'); }, readFile, home: '/h', platform: 'darwin' });
   assert.equal(s.source, 'reads ~/.gemini');
 });
 
 test('agentStatus returns unknown for an id that is not in the registry', async () => {
-  const s = await agentStatus('nope', { exec: async () => 'x', readFile: async () => null, home: '/h' });
+  const s = await agentStatus('nope', { exec: async () => 'x', readFile: async () => null, home: '/h', platform: 'darwin' });
   assert.equal(s.signedIn, null);
 });
 
@@ -208,7 +208,7 @@ test('agentStatus: grok with no auth file but a stored XAI_API_KEY is signed in'
   const s = await agentStatus('grok', {
     exec: async () => { throw new Error('must not exec'); },
     readFile: async () => null,
-    home: '/h',
+    home: '/h', platform: 'darwin',
     envKeys: { XAI_API_KEY: 'xai-noleak' },
     env: {},
   });
@@ -223,7 +223,7 @@ test('agentStatus: grok also sees XAI_API_KEY on process env when Keys is empty'
   const s = await agentStatus('grok', {
     exec: async () => { throw new Error('must not exec'); },
     readFile: async () => null,
-    home: '/h',
+    home: '/h', platform: 'darwin',
     envKeys: {},
     env: { XAI_API_KEY: 'xai-env' },
   });
@@ -240,7 +240,7 @@ test('agentStatus: grok account file still wins over a stored key', async () => 
   const s = await agentStatus('grok', {
     exec: async () => { throw new Error('must not exec'); },
     readFile: async (p) => (p.endsWith('auth.json') ? auth : null),
-    home: '/h',
+    home: '/h', platform: 'darwin',
     envKeys: { XAI_API_KEY: 'xai-skip' },
     env: {},
   });
@@ -250,7 +250,43 @@ test('agentStatus: grok account file still wins over a stored key', async () => 
 });
 
 test('detectAgents expands configPath so the renderer never needs $HOME', async () => {
-  const out = await detectAgents({ exec: async () => '/bin/x', home: '/h' });
+  const out = await detectAgents({ exec: async () => '/bin/x', home: '/h', platform: 'darwin' });
   assert.equal(out.find((a) => a.id === 'hermes').configFile, '/h/.hermes/config.yaml');
   assert.equal(out.find((a) => a.id === 'antigravity').configFile, '/h/.gemini/settings.json');
+});
+
+// ---- the install command for the machine asking ----------------------------
+// The setup sheet shows this string, copies it, and types it into a tile. A
+// `curl … | bash` typed into PowerShell does not fail with an error anybody can
+// act on: it reports that `curl` is an alias for Invoke-WebRequest and that it
+// has no parameter named -fsSL, which reads as a broken app rather than as the
+// wrong operating system.
+
+test('every agent can be installed from Windows, with a first-party command', () => {
+  for (const a of KNOWN_AGENTS) {
+    const cmd = installFor(a, 'win32');
+    assert.ok(cmd, `${a.id} has no Windows install command`);
+    assert.ok(!/\bcurl -fsSL\b/.test(cmd), `${a.id} still hands PowerShell a curl line: ${cmd}`);
+    assert.ok(!cmd.includes('&&'), `${a.id} uses &&, which Windows PowerShell 5.1 cannot parse: ${cmd}`);
+  }
+});
+
+test('a Mac is still given the Mac command', () => {
+  const claude = KNOWN_AGENTS.find((a) => a.id === 'claude');
+  assert.equal(installFor(claude, 'darwin'), 'curl -fsSL https://claude.ai/install.sh | bash');
+  assert.equal(installFor(claude, 'win32'), 'irm https://claude.ai/install.ps1 | iex');
+});
+
+// One command that is true on both platforms is better than two that can drift,
+// so an agent installed by npm keeps the single line it already had.
+test('an npm install is not forked into two spellings of itself', () => {
+  const codex = KNOWN_AGENTS.find((a) => a.id === 'codex');
+  assert.equal(installFor(codex, 'win32'), installFor(codex, 'darwin'));
+});
+
+test('detectAgents hands the renderer the command for the platform it is on', async () => {
+  const win = await detectAgents({ exec: async () => '', home: 'C:\\Users\\x', platform: 'win32' });
+  assert.match(win.find((a) => a.id === 'kimi').install, /install\.ps1/);
+  const mac = await detectAgents({ exec: async () => '', home: '/Users/x', platform: 'darwin' });
+  assert.match(mac.find((a) => a.id === 'kimi').install, /install\.sh/);
 });

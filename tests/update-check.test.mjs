@@ -66,13 +66,48 @@ test('reads the version off the tag', () => {
 });
 
 test('offers the dmg built for this machine', () => {
-  assert.equal(releaseFromApi(release(), 'arm64').url, 'https://example.test/arm64.dmg');
-  assert.equal(releaseFromApi(release(), 'x64').url, 'https://example.test/x64.dmg');
+  assert.equal(releaseFromApi(release(), 'arm64', 'darwin').url, 'https://example.test/arm64.dmg');
+  assert.equal(releaseFromApi(release(), 'x64', 'darwin').url, 'https://example.test/x64.dmg');
 });
 
 test('falls back to the release page when no dmg matches', () => {
-  const r = releaseFromApi(release({ assets: [] }), 'arm64');
+  const r = releaseFromApi(release({ assets: [] }), 'arm64', 'darwin');
   assert.equal(r.url, 'https://github.com/mrdainami/nami/releases/tag/v0.2.0');
+});
+
+// One release carries four installers now — two Mac dmgs and two Windows
+// setups — so "the newest asset" stopped being an answer. Offering the wrong
+// platform's file is worse than offering nothing: it downloads, it opens, and
+// it cannot possibly install.
+const bothPlatforms = release({
+  assets: [
+    { name: 'Nami-arm64.dmg', browser_download_url: 'https://example.test/mac-arm64.dmg' },
+    { name: 'Nami-x64.dmg', browser_download_url: 'https://example.test/mac-x64.dmg' },
+    { name: 'Nami-arm64.exe', browser_download_url: 'https://example.test/win-arm64.exe' },
+    { name: 'Nami-x64.exe', browser_download_url: 'https://example.test/win-x64.exe' },
+  ],
+});
+
+test('a PC is offered the installer and a Mac the dmg, never the other way round', () => {
+  assert.equal(releaseFromApi(bothPlatforms, 'x64', 'win32').url, 'https://example.test/win-x64.exe');
+  assert.equal(releaseFromApi(bothPlatforms, 'arm64', 'win32').url, 'https://example.test/win-arm64.exe');
+  assert.equal(releaseFromApi(bothPlatforms, 'arm64', 'darwin').url, 'https://example.test/mac-arm64.dmg');
+  assert.equal(releaseFromApi(bothPlatforms, 'x64', 'darwin').url, 'https://example.test/mac-x64.dmg');
+});
+
+// A Mac-only release — every release before this one — must not hand a Windows
+// user a dmg. The release page is the honest answer there.
+test('a release with nothing for this platform sends the user to the page', () => {
+  const macOnly = release({
+    assets: [{ name: 'Nami-arm64.dmg', browser_download_url: 'https://example.test/mac-arm64.dmg' }],
+  });
+  assert.equal(releaseFromApi(macOnly, 'x64', 'win32').url,
+    'https://github.com/mrdainami/nami/releases/tag/v0.2.0');
+});
+
+test('a platform Nami does not ship an installer for still gets the page', () => {
+  assert.equal(releaseFromApi(bothPlatforms, 'x64', 'linux').url,
+    'https://github.com/mrdainami/nami/releases/tag/v0.2.0');
 });
 
 test('a draft is not a release', () => {
@@ -94,7 +129,7 @@ test('a malformed answer yields nothing rather than throwing', () => {
 
 test('reports an update when the published release is newer', async () => {
   const found = await checkForUpdate({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release(),
   });
   assert.deepEqual(found, { version: '0.2.0', url: 'https://example.test/arm64.dmg' });
@@ -102,7 +137,7 @@ test('reports an update when the published release is newer', async () => {
 
 test('says nothing when we are already current', async () => {
   const found = await checkForUpdate({
-    currentVersion: '0.2.0', arch: 'arm64',
+    currentVersion: '0.2.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release(),
   });
   assert.equal(found, null);
@@ -110,7 +145,7 @@ test('says nothing when we are already current', async () => {
 
 test('says nothing when we are ahead of the release', async () => {
   const found = await checkForUpdate({
-    currentVersion: '0.3.0', arch: 'arm64',
+    currentVersion: '0.3.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release(),
   });
   assert.equal(found, null);
@@ -120,7 +155,7 @@ test('a network failure is silent', async () => {
   // Offline, rate-limited or behind a captive portal must never reach the user:
   // an update check is the app's business, not something it can nag about.
   const found = await checkForUpdate({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => { throw new Error('getaddrinfo ENOTFOUND'); },
   });
   assert.equal(found, null);
@@ -128,7 +163,7 @@ test('a network failure is silent', async () => {
 
 test('a rate-limit body is silent', async () => {
   const found = await checkForUpdate({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => ({ message: 'API rate limit exceeded' }),
   });
   assert.equal(found, null);
@@ -143,7 +178,7 @@ test('a rate-limit body is silent', async () => {
 
 test('a newer release comes back as an update, with somewhere to get it', async () => {
   const st = await updateStatus({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release(),
   });
   assert.equal(st.state, 'update');
@@ -153,7 +188,7 @@ test('a newer release comes back as an update, with somewhere to get it', async 
 
 test('the same version comes back as current', async () => {
   const st = await updateStatus({
-    currentVersion: '0.2.0', arch: 'arm64',
+    currentVersion: '0.2.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release(),
   });
   assert.deepEqual(st, { state: 'current' });
@@ -161,7 +196,7 @@ test('the same version comes back as current', async () => {
 
 test('being ahead of the release still reads as current', async () => {
   const st = await updateStatus({
-    currentVersion: '0.3.0', arch: 'arm64',
+    currentVersion: '0.3.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release(),
   });
   assert.deepEqual(st, { state: 'current' });
@@ -170,7 +205,7 @@ test('being ahead of the release still reads as current', async () => {
 test('a network failure says so instead of claiming we are current', async () => {
   // the whole point of the second entry point
   const st = await updateStatus({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => { throw new Error('getaddrinfo ENOTFOUND'); },
   });
   assert.deepEqual(st, { state: 'offline' });
@@ -179,7 +214,7 @@ test('a network failure says so instead of claiming we are current', async () =>
 test('a draft-only latest reads as current, not as an error', async () => {
   // GitHub answered, there is simply nothing a user could install
   const st = await updateStatus({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release({ draft: true }),
   });
   assert.deepEqual(st, { state: 'current' });
@@ -188,12 +223,12 @@ test('a draft-only latest reads as current, not as an error', async () => {
 test('the background poll keeps its old contract exactly', async () => {
   // everything else in the app still calls checkForUpdate and expects null
   const quiet = await checkForUpdate({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => { throw new Error('offline'); },
   });
   assert.equal(quiet, null);
   const found = await checkForUpdate({
-    currentVersion: '0.1.0', arch: 'arm64',
+    currentVersion: '0.1.0', arch: 'arm64', platform: 'darwin',
     fetchJson: async () => release(),
   });
   assert.deepEqual(found, { version: '0.2.0', url: 'https://example.test/arm64.dmg' });

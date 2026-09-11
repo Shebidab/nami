@@ -43,21 +43,30 @@ function isNewer(candidate, current) {
   return false;
 }
 
+// What a downloadable installer is called on each platform. One release now
+// carries four of them — two Mac dmgs and two Windows installers — so "the
+// newest asset" is no longer an answer; the extension is what tells a Mac's
+// download from a PC's.
+const INSTALLER_EXT = { darwin: '.dmg', win32: '.exe' };
+
 // GitHub's release JSON → { version, url }, or null if it is not something a
 // user should be offered: a draft, a prerelease, or not a release at all.
-function releaseFromApi(doc, arch = process.arch) {
+function releaseFromApi(doc, arch = process.arch, platform = process.platform) {
   if (!doc || typeof doc !== 'object') return null;
   if (doc.draft || doc.prerelease) return null;
   const version = String(doc.tag_name || '').trim().replace(/^v/i, '');
   if (!parseVersion(version)) return null;
 
-  // Hand the user the dmg for the machine they are on. electron-builder names
-  // the arm64 one with the arch in it and leaves x64 bare, so match on that and
-  // fall back to the release page rather than guessing wrong.
+  // Hand the user the installer for the machine they are on: the dmg on a Mac,
+  // the .exe on Windows — never the other, which is the one mistake here that
+  // is worse than offering nothing. A platform with no naming rule of its own
+  // (a Linux build from source) falls through to the release page, which is
+  // also where an arch we cannot match lands.
+  const ext = INSTALLER_EXT[String(platform)] || '';
   const assets = Array.isArray(doc.assets) ? doc.assets : [];
-  const dmgs = assets.filter((a) => a && typeof a.name === 'string' && a.name.endsWith('.dmg'));
+  const mine = ext ? assets.filter((a) => a && typeof a.name === 'string' && a.name.endsWith(ext)) : [];
   const wantsArm = String(arch) === 'arm64';
-  const pick = dmgs.find((a) => (/arm64/i.test(a.name)) === wantsArm) || null;
+  const pick = mine.find((a) => (/arm64/i.test(a.name)) === wantsArm) || null;
   const url = (pick && pick.browser_download_url) || doc.html_url || '';
   if (!url) return null;
   return { version, url };
@@ -86,14 +95,14 @@ async function fetchLatest(url = LATEST) {
 // A reachable GitHub with nothing offerable (the latest is a draft, or a
 // prerelease) is 'current' rather than an error. From where the user stands
 // there is nothing to install, which is what 'current' means.
-async function updateStatus({ currentVersion, arch = process.arch, fetchJson = fetchLatest } = {}) {
+async function updateStatus({ currentVersion, arch = process.arch, platform = process.platform, fetchJson = fetchLatest } = {}) {
   let doc = null;
   try {
     doc = await fetchJson();
   } catch (_) {
     return { state: 'offline' };
   }
-  const rel = releaseFromApi(doc, arch);
+  const rel = releaseFromApi(doc, arch, platform);
   if (!rel || !isNewer(rel.version, currentVersion)) return { state: 'current' };
   return { state: 'update', version: rel.version, url: rel.url };
 }
@@ -106,4 +115,4 @@ async function checkForUpdate(opts = {}) {
   return st.state === 'update' ? { version: st.version, url: st.url } : null;
 }
 
-module.exports = { isNewer, releaseFromApi, checkForUpdate, updateStatus, parseVersion, LATEST };
+module.exports = { isNewer, releaseFromApi, checkForUpdate, updateStatus, parseVersion, LATEST, INSTALLER_EXT };

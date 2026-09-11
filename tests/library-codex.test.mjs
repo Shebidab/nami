@@ -8,6 +8,7 @@
 // the filename.
 
 import { test, before } from 'node:test';
+import { join } from 'node:path';   // a path suffix is segments, not a string with slashes in it
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,7 +49,7 @@ test('a hand-made Codex agent is listed, as Codex, with its filename as the slug
   assert.equal(rows.length, 1);
   assert.equal(rows[0].platform, 'codex');
   assert.equal(rows[0].scope, 'project');
-  assert.match(rows[0].filePath, /\.codex\/agents\/toml-critic\.toml$/);
+  assert.ok(rows[0].filePath.endsWith(join('.codex', 'agents', 'toml-critic.toml')), rows[0].filePath);
 });
 
 test('its name and description come out of the TOML, not the filename', () => {

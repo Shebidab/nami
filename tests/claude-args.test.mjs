@@ -55,7 +55,10 @@ test('projectSlug matches claude transcript folder naming', () => {
 // never pinned, so the title watcher followed a transcript nothing wrote and
 // the tile came back empty on the next launch.
 const { shellQuote } = require('../src/main/claude-args.js');
-const typed = (o) => ['claude', ...claudeSpawnArgs(o)].map(shellQuote).join(' ');
+// The typed-fallback cases below are POSIX quoting; the Windows dialect has a
+// suite of its own at the foot of this file.
+const unixQuote = (a) => shellQuote(a, 'darwin');
+const typed = (o) => ['claude', ...claudeSpawnArgs(o)].map((a) => shellQuote(a, 'darwin')).join(' ');
 
 test('the shell fallback types the whole command, not a bare claude', () => {
   assert.equal(
@@ -79,15 +82,33 @@ test('a multi-word session name survives being typed into a shell', () => {
 });
 
 test('shellQuote leaves plain arguments alone and neutralises the rest', () => {
-  assert.equal(shellQuote('--session-id'), '--session-id');
-  assert.equal(shellQuote('/Users/x/.local/bin/claude'), '/Users/x/.local/bin/claude');
-  assert.equal(shellQuote('two words'), "'two words'");
-  assert.equal(shellQuote(''), "''");
+  assert.equal(unixQuote('--session-id'), '--session-id');
+  assert.equal(unixQuote('/Users/x/.local/bin/claude'), '/Users/x/.local/bin/claude');
+  assert.equal(unixQuote('two words'), "'two words'");
+  assert.equal(unixQuote(''), "''");
   // nothing inside single quotes expands: no variable, no subshell, no glob
-  assert.equal(shellQuote('$HOME'), "'$HOME'");
-  assert.equal(shellQuote('`whoami`'), "'`whoami`'");
-  assert.equal(shellQuote('a; rm -rf /'), "'a; rm -rf /'");
-  assert.equal(shellQuote('*'), "'*'");
+  assert.equal(unixQuote('$HOME'), "'$HOME'");
+  assert.equal(unixQuote('`whoami`'), "'`whoami`'");
+  assert.equal(unixQuote('a; rm -rf /'), "'a; rm -rf /'");
+  assert.equal(unixQuote('*'), "'*'");
   // the one character single quotes cannot carry, closed and reopened
-  assert.equal(shellQuote("Cal's button"), "'Cal'\\''s button'");
+  assert.equal(unixQuote("Cal's button"), "'Cal'\\''s button'");
+});
+
+// The same job in the other shell. PowerShell has no backslash escape inside a
+// single-quoted string — `'Cal'\''s button'` is not an escape there, it is an
+// unterminated string followed by whatever the parser makes of the rest — so
+// the quote is doubled instead. A session named "Cal's export button" is an
+// ordinary thing to have, and this is the fallback path where the name is typed
+// rather than passed as an argv entry.
+test('the windows dialect doubles the quote rather than escaping it', () => {
+  const winQuote = (a) => shellQuote(a, 'win32');
+  assert.equal(winQuote('--session-id'), '--session-id');
+  assert.equal(winQuote('two words'), "'two words'");
+  assert.equal(winQuote(''), "''");
+  assert.equal(winQuote("Cal's button"), "'Cal''s button'");
+  // single quotes are literal in PowerShell too, so the same characters are
+  // neutralised for the same reason
+  assert.equal(winQuote('$HOME'), "'$HOME'");
+  assert.equal(winQuote('a; rm -rf /'), "'a; rm -rf /'");
 });

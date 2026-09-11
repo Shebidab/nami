@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+const { join } = path;   // a path suffix is segments, not a string with slashes in it
 import { scanLibrary, createItem, duplicateItem, extractEdges } from '../src/main/library.js';
 
 // Build one fixture "computer": a project folder and a fake home dir covering all sources.
@@ -123,7 +124,7 @@ test('scan without a project still returns user + plugin items', () => {
 test('createItem scaffolds a claude project agent and refuses overwrite', () => {
   const res = createItem({ projectPath: project, homeDir: home, type: 'agent', platform: 'claude', scope: 'project', name: 'My New Agent' });
   assert.ok(res.ok);
-  assert.ok(res.filePath.endsWith('.claude/agents/my-new-agent.md'));
+  assert.ok(res.filePath.endsWith(join('.claude', 'agents', 'my-new-agent.md')));
   const text = fs.readFileSync(res.filePath, 'utf8');
   assert.match(text, /name: my-new-agent/);
   assert.match(text, /description: /);
@@ -134,7 +135,7 @@ test('createItem scaffolds a claude project agent and refuses overwrite', () => 
 test('createItem scaffolds a skill in the project\'s own folder, and an opencode agent', () => {
   const sk = createItem({ projectPath: project, homeDir: home, type: 'skill', platform: 'claude', scope: 'project', name: 'Cool Skill' });
   assert.ok(sk.ok);
-  assert.ok(sk.filePath.endsWith('skills/cool-skill/SKILL.md'), sk.filePath);
+  assert.ok(sk.filePath.endsWith(join('skills', 'cool-skill', 'SKILL.md')), sk.filePath);
   assert.ok(!sk.filePath.includes('.claude'), 'no agent\'s name on the folder');
   assert.equal(sk.item.availability, 'project');
   // a skill asked for at user scope still lands in the project — nothing reads a
@@ -148,7 +149,7 @@ test('createItem scaffolds a skill in the project\'s own folder, and an opencode
   assert.match(none.error, /Open a folder first/);
   const oc = createItem({ projectPath: project, homeDir: home, type: 'agent', platform: 'opencode', scope: 'user', name: 'OC Agent' });
   assert.ok(oc.ok);
-  assert.ok(oc.filePath.endsWith('.config/opencode/agent/oc-agent.md'));
+  assert.ok(oc.filePath.endsWith(join('.config', 'opencode', 'agent', 'oc-agent.md')));
   assert.match(fs.readFileSync(oc.filePath, 'utf8'), /mode: subagent/);
 });
 
@@ -157,13 +158,13 @@ test('"Use here" copies a skill into the project\'s own folder, -copy on collisi
   const tdd = items.find((i) => i.slug === 'tdd' && i.scope === 'plugin');
   const one = duplicateItem({ filePath: tdd.filePath, type: 'skill', projectPath: project });
   assert.ok(one.ok);
-  assert.ok(one.filePath.endsWith('skills/tdd/SKILL.md'), one.filePath);
+  assert.ok(one.filePath.endsWith(join('skills', 'tdd', 'SKILL.md')), one.filePath);
   assert.ok(!one.filePath.includes('.claude'), 'it lands in the neutral folder, not Claude\'s');
   assert.match(fs.readFileSync(one.filePath, 'utf8'), /Test first/);
   assert.equal(one.item.availability, 'project');
   const two = duplicateItem({ filePath: tdd.filePath, type: 'skill', projectPath: project });
   assert.ok(two.ok);
-  assert.ok(two.filePath.endsWith('skills/tdd-copy/SKILL.md'), two.filePath);
+  assert.ok(two.filePath.endsWith(join('skills', 'tdd-copy', 'SKILL.md')), two.filePath);
 });
 
 // Most of these skills are links into a shared store. Copying the link would
@@ -209,7 +210,7 @@ test('duplicateItem copies a plugin agent file into the project', () => {
   const critic = items.find((i) => i.slug === 'critic' && i.scope === 'plugin');
   const res = duplicateItem({ filePath: critic.filePath, type: 'agent', projectPath: project });
   assert.ok(res.ok);
-  assert.ok(res.filePath.endsWith('.claude/agents/critic.md'));
+  assert.ok(res.filePath.endsWith(join('.claude', 'agents', 'critic.md')));
 });
 
 test('extractEdges: hyphenated slug and [[wiki-link]] references, no substring noise', () => {

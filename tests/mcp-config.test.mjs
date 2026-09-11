@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+import { abs } from './paths.mjs';
 const { upsertMcpJson, upsertOpencode, removeService, detectServices } = require('../src/main/mcp-config.js');
 
 function memIo(seed = {}) {
@@ -16,35 +17,35 @@ function memIo(seed = {}) {
 
 test('upsertMcpJson creates the file and preserves neighbors on second write', () => {
   const io = memIo();
-  upsertMcpJson({ file: '/p/.mcp.json', id: 'notion', entry: { command: 'npx', args: ['x'] }, io });
-  upsertMcpJson({ file: '/p/.mcp.json', id: 'slack', entry: { command: 'npx', args: ['y'] }, io });
-  const out = JSON.parse(io.files['/p/.mcp.json']);
+  upsertMcpJson({ file: abs('p', '.mcp.json'), id: 'notion', entry: { command: 'npx', args: ['x'] }, io });
+  upsertMcpJson({ file: abs('p', '.mcp.json'), id: 'slack', entry: { command: 'npx', args: ['y'] }, io });
+  const out = JSON.parse(io.files[abs('p', '.mcp.json')]);
   assert.deepEqual(Object.keys(out.mcpServers).sort(), ['notion', 'slack']);
 });
 
 test('upsertMcpJson never clobbers unrelated keys or malformed-but-parseable extras', () => {
-  const io = memIo({ '/p/.mcp.json': JSON.stringify({ mcpServers: { db: { command: 'x' } }, somethingElse: 1 }) });
-  upsertMcpJson({ file: '/p/.mcp.json', id: 'notion', entry: { command: 'npx' }, io });
-  const out = JSON.parse(io.files['/p/.mcp.json']);
+  const io = memIo({ [abs('p', '.mcp.json')]: JSON.stringify({ mcpServers: { db: { command: 'x' } }, somethingElse: 1 }) });
+  upsertMcpJson({ file: abs('p', '.mcp.json'), id: 'notion', entry: { command: 'npx' }, io });
+  const out = JSON.parse(io.files[abs('p', '.mcp.json')]);
   assert.equal(out.somethingElse, 1);
   assert.ok(out.mcpServers.db);
 });
 
 test('opencode entries land under mcp and removal cleans both shapes', () => {
   const io = memIo();
-  upsertOpencode({ file: '/p/opencode.json', id: 'notion', entry: { type: 'local', command: ['x'] }, io });
-  assert.ok(JSON.parse(io.files['/p/opencode.json']).mcp.notion);
-  const changed = removeService({ files: ['/p/.mcp.json', '/p/opencode.json'], id: 'notion', io });
-  assert.deepEqual(changed, ['/p/opencode.json']);
-  assert.equal(JSON.parse(io.files['/p/opencode.json']).mcp.notion, undefined);
+  upsertOpencode({ file: abs('p', 'opencode.json'), id: 'notion', entry: { type: 'local', command: ['x'] }, io });
+  assert.ok(JSON.parse(io.files[abs('p', 'opencode.json')]).mcp.notion);
+  const changed = removeService({ files: [abs('p', '.mcp.json'), abs('p', 'opencode.json')], id: 'notion', io });
+  assert.deepEqual(changed, [abs('p', 'opencode.json')]);
+  assert.equal(JSON.parse(io.files[abs('p', 'opencode.json')]).mcp.notion, undefined);
 });
 
 test('detectServices merges catalog names, flags strangers as custom, reports scope and platform', () => {
   const io = memIo({
-    '/proj/.mcp.json': JSON.stringify({ mcpServers: { notion: { command: 'npx' }, wiki: { command: 'node' } } }),
-    '/home/u/.config/opencode/opencode.json': JSON.stringify({ mcp: { notion: { type: 'local' } } }),
+    [abs('proj', '.mcp.json')]: JSON.stringify({ mcpServers: { notion: { command: 'npx' }, wiki: { command: 'node' } } }),
+    [abs('home', 'u', '.config', 'opencode', 'opencode.json')]: JSON.stringify({ mcp: { notion: { type: 'local' } } }),
   });
-  const out = detectServices({ projectPath: '/proj', home: '/home/u', io });
+  const out = detectServices({ projectPath: abs('proj'), home: abs('home', 'u'), io });
   const notion = out.find((s) => s.id === 'notion');
   assert.equal(notion.name, 'Notion');
   assert.equal(notion.custom, false);

@@ -62,4 +62,26 @@ const VIEWS = ['desk', 'split'];
 function normalizeView(name) { return VIEWS.includes(name) ? name : 'desk'; }
 function themeBackground(name) { return THEME_BG[normalizeTheme(name)]; }
 
-module.exports = { readSettings, writeSettings, fsIo, normalizeTheme, themeBackground, THEMES, DEFAULT_THEME, normalizeView, VIEWS };
+// What Windows paints its own caption buttons on, per desk.
+//
+// This exists only on Windows and it is the one piece of Nami's surface CSS
+// cannot reach: the minimise/maximise/close overlay is drawn by the OS, so
+// switching to a dark desk leaves cream-on-cream buttons over a graphite
+// header until someone tells the window otherwise (main.js does, on
+// theme:applied).
+//
+// Two of the desks are excluded from taking their own --paper: glass and
+// graphite define it as a translucent wash, and an overlay colour must be
+// opaque. They take the same opaque ground the window is created with instead,
+// which is what sits behind that wash anyway.
+const THEME_TITLEBAR = {
+  paper:    { color: '#fffdf6', symbolColor: '#2f2b26' },
+  operator: { color: '#1f1f1f', symbolColor: '#eae7e1' },
+  glass:    { color: THEME_BG.glass, symbolColor: '#1d1d22' },
+  graphite: { color: THEME_BG.graphite, symbolColor: '#ececf1' },
+  soft:     { color: '#e5e5e5', symbolColor: '#2c2a33' },
+  dusk:     { color: '#262a31', symbolColor: '#e8eaee' },
+};
+function themeTitleBar(name) { return THEME_TITLEBAR[normalizeTheme(name)]; }
+
+module.exports = { readSettings, writeSettings, fsIo, normalizeTheme, themeBackground, themeTitleBar, THEMES, DEFAULT_THEME, normalizeView, VIEWS };

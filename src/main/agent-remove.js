@@ -16,10 +16,17 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { agentById, expandHome } = require('./agents-detect.js');
 
+// A trailing separator is stripped from both sides before they are compared,
+// and it has to be BOTH separators. On Windows `C:\Users\x\` normalizes with a
+// trailing backslash that a /\/+$/ strip leaves in place, so the home folder
+// itself stopped equalling itself, fell through to the prefix test, and passed
+// it — the one input this function exists to refuse.
+const TRAILING_SEP = /[\\/]+$/;
+
 function isSafeRemovePath(p, home) {
   if (typeof p !== 'string' || !p || !path.isAbsolute(p)) return false;
-  const norm = path.normalize(p).replace(/\/+$/, '');
-  const base = path.normalize(home).replace(/\/+$/, '');
+  const norm = path.normalize(p).replace(TRAILING_SEP, '');
+  const base = path.normalize(home).replace(TRAILING_SEP, '');
   if (norm === base) return false;
   return norm.startsWith(base + path.sep);
 }

@@ -39,12 +39,35 @@
 //
 // Pure: main.js owns the pty, this owns the parsing.
 
+const { pathProbeCommand } = require('./platform.js');
+
 const OPEN = ']1337;NamiRunDone=';
 const DONE_RE = /\]1337;NamiRunDone=(-?\d{1,5})(?:|\\)/;
 
-// The suffix appended to a run command. Single-quoted so the shell expands
-// nothing in it; "$?" quoted so an empty status cannot swallow the argument.
-function doneSuffix(command) {
+// The suffix appended to a run command.
+//
+// Unix: single-quoted so the shell expands nothing in it; "$?" quoted so an
+// empty status cannot swallow the argument.
+//
+// PowerShell has no $? meaning what $? means in sh, so it takes two variables.
+// $LASTEXITCODE is the exit code of the last NATIVE program and is $null until
+// one has run — a missing command, or a cmdlet that failed, never sets it. $?
+// is the boolean "did the last statement succeed", and it is read FIRST,
+// because reading $LASTEXITCODE into a variable is itself a statement that
+// succeeds and would set $? to true before we could look at it. Measured under
+// a real ConPTY: `cmd /c exit 7` → 7, a missing program → 1, a failing cmdlet
+// → 1, an ordinary pipeline → 0. That is sharper than the Unix branch manages
+// (see the pipeline note above), and the caller still treats a zero as "the
+// shell reached the end", never as "it worked".
+//
+// No double quote appears anywhere in the PowerShell form, on purpose: the
+// whole suffix is handed to CreateProcess as one argv entry, node-pty wraps
+// that entry in double quotes, and a nested one is where it goes wrong.
+function doneSuffix(command, platform = process.platform) {
+  if (platform === 'win32') {
+    return `${command}; $ok = $?; $c = $LASTEXITCODE; if ($null -eq $c) { if ($ok) { $c = 0 } else { $c = 1 } }; `
+      + "[Console]::Write([char]27 + ']1337;NamiRunDone=' + $c + [char]7)";
+  }
   return `${command}; printf '\\033]1337;NamiRunDone=%s\\007' "$?"`;
 }
 
@@ -58,13 +81,25 @@ function doneSuffix(command) {
 // printed. The caller writes the `$ command` header itself, straight to the
 // renderer, so the tile still says what it is running.
 //
-// `exec <shell> -i` at the end is what keeps the tile a terminal afterwards
-// rather than a corpse — and it is a fresh interactive shell, so it re-reads
-// the rc file the installer just wrote a PATH line into. The prompt you are
-// left with can run the thing that was installed; the one that ran the install
-// could not.
-function oneShotArgs(shell, command) {
-  return ['-i', '-c', `${doneSuffix(command)}; exec ${shell} -i`];
+// The tail is what keeps the tile a terminal afterwards rather than a corpse,
+// and on both platforms it does one more thing: it leaves you at a prompt that
+// can run what was just installed, which the shell that ran the install could
+// not.
+//
+//   Unix     `exec <shell> -i` — a fresh interactive shell, so it re-reads the
+//            rc file the installer just wrote a PATH line into.
+//   Windows  -NoExit, plus a re-read of PATH out of the registry. There is no
+//            rc file to source: a Windows installer writes HKCU\Environment,
+//            and no already-running process — nor any child it spawns, which
+//            inherits the same stale copy — ever sees that write. Pulling both
+//            halves of the registry PATH back into $env:Path is the only thing
+//            that has here the effect `exec` has there.
+function oneShotArgs(shell, command, platform = process.platform) {
+  if (platform === 'win32') {
+    return ['-NoLogo', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command',
+      `${doneSuffix(command, platform)}; $env:Path = ${pathProbeCommand(platform)}`];
+  }
+  return ['-i', '-c', `${doneSuffix(command, platform)}; exec ${shell} -i`];
 }
 
 // Feed one chunk of pty output. Returns the exit code once, or null.

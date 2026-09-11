@@ -1,14 +1,22 @@
-// Which agent CLIs live on this Mac? Curated registry + detection.
-// Detection runs `command -v` through the user's login shell so PATH additions
-// from .zshrc/.zprofile count; exec is injectable for tests.
-// Install commands and docs links verified against official sources 2026-08-08.
+// Which agent CLIs live on this machine? Curated registry + detection.
+// Detection asks the user's login shell (`command -v`, or Get-Command on
+// Windows) so PATH additions from .zshrc/.zprofile — or from the registry —
+// count; exec is injectable for tests.
+//
+// Install commands and docs links verified against official sources:
+// the unix ones 2026-08-08, the Windows ones 2026-09-11. Every agent below has
+// a first-party Windows installer; none of them is a guess, and none is a
+// WSL-only fallback dressed up as a native one. Where the vendor publishes both
+// a PowerShell script and an npm package, the npm line wins if the Mac entry is
+// already npm — one command that is true on both platforms beats two that
+// drift apart.
 const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { parseAgentStatus } = require('./agent-status.js');
-const { loginShell, whichCommand, binSearchDirs } = require('./platform.js');
+const { loginShell, whichCommand, binSearchDirs, binExtensions, pathFor } = require('./platform.js');
 
 // Every one of these keeps skills somewhere of its own — ~/.claude/skills,
 // ~/.codex/skills, ~/.hermes/skills and so on — so writing a skill into all of
@@ -25,6 +33,7 @@ const KNOWN_AGENTS = [
   { id: 'claude', name: 'Claude Code', bin: 'claude', kind: 'claude',
     sub: 'your subscription · slash commands work',
     install: 'curl -fsSL https://claude.ai/install.sh | bash',
+    installWin: 'irm https://claude.ai/install.ps1 | iex',
     docs: 'https://docs.anthropic.com/en/docs/claude-code',
     contextFile: 'CLAUDE.md',
     projectSkillsDir: '.claude/skills',
@@ -42,6 +51,10 @@ const KNOWN_AGENTS = [
     } },
   { id: 'codex', name: 'Codex', bin: 'codex', kind: 'run',
     sub: "OpenAI's coding agent",
+    // No installWin: this line is already the one OpenAI documents for Windows.
+    // There is a PowerShell installer too (chatgpt.com/codex/install.ps1) and
+    // it is deliberately not used — one command that is true everywhere cannot
+    // drift out of step with itself.
     install: 'npm install -g @openai/codex',
     docs: 'https://developers.openai.com/codex/cli',
     contextFile: 'AGENTS.md',
@@ -55,6 +68,9 @@ const KNOWN_AGENTS = [
   { id: 'opencode', name: 'OpenCode', bin: 'opencode', kind: 'run',
     sub: 'open-source agent · bring any model',
     install: 'curl -fsSL https://opencode.ai/install | bash',
+    // opencode's own installer is a shell script and its docs point Windows at
+    // WSL; the npm package is the first-party native route.
+    installWin: 'npm install -g opencode-ai',
     docs: 'https://opencode.ai/docs',
     contextFile: 'AGENTS.md',
     lifecycle: {
@@ -68,6 +84,7 @@ const KNOWN_AGENTS = [
   { id: 'grok', name: 'Grok', bin: 'grok', kind: 'run',
     sub: "xAI's coding agent",
     install: 'curl -fsSL https://x.ai/cli/install.sh | bash',
+    installWin: 'irm https://x.ai/cli/install.ps1 | iex',
     docs: 'https://grok.com/build',
     contextFile: 'AGENTS.md',
     lifecycle: {
@@ -92,6 +109,7 @@ const KNOWN_AGENTS = [
   { id: 'antigravity', name: 'Antigravity', bin: 'agy', kind: 'run',
     sub: "Google's coding agent (replaced Gemini CLI)",
     install: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    installWin: 'irm https://antigravity.google/cli/install.ps1 | iex',
     docs: 'https://antigravity.google/docs/cli',
     contextFile: 'GEMINI.md',
     lifecycle: {
@@ -105,6 +123,11 @@ const KNOWN_AGENTS = [
     sub: "Nous Research's agent, learns as it works",
     // chain the guided first-run wizard so the install tile walks the user all the way in
     install: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash && hermes setup --portal',
+    // `;` and not `&&`: Windows PowerShell 5.1 — the one every Windows 10 and
+    // 11 has in the box — has no `&&`, and parses it as a syntax error before
+    // running anything at all. The wizard is chained for the same reason it is
+    // on the Mac: the install tile should walk the user all the way in.
+    installWin: 'iex (irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1); hermes setup --portal',
     docs: 'https://hermes-agent.nousresearch.com',
     lifecycle: {
       // `hermes auth status` demands a provider argument and `hermes auth list`
@@ -125,6 +148,7 @@ const KNOWN_AGENTS = [
   { id: 'kimi', name: 'Kimi Code', bin: 'kimi', kind: 'run',
     sub: "Moonshot's coding agent",
     install: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash',
+    installWin: 'irm https://code.kimi.com/kimi-code/install.ps1 | iex',
     docs: 'https://moonshotai.github.io/kimi-code/en/',
     contextFile: 'AGENTS.md',
     // `kimi login` exists but the CLI has no logout, and a sheet that can
@@ -165,10 +189,13 @@ function pathFromShellOutput(stdout, platform = process.platform) {
 // answer that is still far better than telling someone their agent is missing.
 async function findOnDisk(bin, { home = os.homedir(), env = process.env, platform = process.platform, access } = {}) {
   const canRun = access || ((p) => fsp.access(p, fs.constants.X_OK));
-  const exts = platform === 'win32' ? ['.exe', '.cmd', '.bat'] : [''];
+  const exts = binExtensions(platform);
+  // pathFor(platform), not path: this function is told which platform to answer
+  // for, and node's own `path` would answer for the one it happens to run on.
+  const join = pathFor(platform).join;
   for (const dir of binSearchDirs({ home, env, platform })) {
     for (const ext of exts) {
-      const p = path.join(dir, bin + ext);
+      const p = join(dir, bin + ext);
       try { await canRun(p); return p; } catch (_) { /* keep looking */ }
     }
   }
@@ -193,15 +220,23 @@ async function shellWhich(bin) {
   return pathFromShellOutput(out) || findOnDisk(bin);
 }
 
-async function detectAgents({ exec = shellWhich, home = os.homedir() } = {}) {
+// The install command for the machine asking, resolved here rather than in the
+// renderer. The setup sheet shows this string, copies it, and types it into a
+// tile — three places that would each have had to learn what platform they are
+// on, to reach the same answer.
+function installFor(agent, platform) {
+  return (platform === 'win32' && agent.installWin) ? agent.installWin : agent.install;
+}
+
+async function detectAgents({ exec = shellWhich, home = os.homedir(), platform = process.platform } = {}) {
   return Promise.all(KNOWN_AGENTS.map(async (a) => {
     let p = '';
     try { p = String((await exec(a.bin)) || '').trim(); } catch (_) { p = ''; }
     // configFile is the ~-expanded twin of lifecycle.configPath, so the renderer
     // can hand it straight to openFile() without knowing where home is.
     const configFile = a.lifecycle && a.lifecycle.configPath
-      ? expandHome(a.lifecycle.configPath, home) : '';
-    return { ...a, found: !!p, path: p, pathShort: shortHome(p, home), configFile };
+      ? expandHome(a.lifecycle.configPath, home, platform) : '';
+    return { ...a, install: installFor(a, platform), found: !!p, path: p, pathShort: shortHome(p, home, platform), configFile };
   }));
 }
 
@@ -213,13 +248,23 @@ async function detectAgents({ exec = shellWhich, home = os.homedir() } = {}) {
 
 function agentById(id) { return KNOWN_AGENTS.find((a) => a.id === id) || null; }
 
-function expandHome(p, home) {
-  return String(p || '').replace(/^~(?=\/|$)/, home);
-}
-// The display twin: ~/.local/bin/hermes reads better than /Users/you/.local/...
-function shortHome(p, home) {
+// A config path in the table is written the way its vendor documents it —
+// `~/.claude.json` — and has to become a real path on a machine where `~` means
+// nothing and the separator is the other one. path.join does both: it swaps the
+// separators on Windows and leaves them alone everywhere else.
+function expandHome(p, home, platform = process.platform) {
   const s = String(p || '');
-  return home && s.startsWith(home + '/') ? '~' + s.slice(home.length) : s;
+  if (!/^~(?:[\/]|$)/.test(s)) return s;
+  const rest = s.slice(1).replace(/^[\/]/, '');
+  return rest ? pathFor(platform).join(home, ...rest.split(/[\/]/)) : home;
+}
+// The display twin: ~/.local/bin/hermes reads better than /Users/you/.local/…,
+// and ~\.local\bin\claude.exe better than C:\Users\you\.local\… — the same
+// saving, and the same reason, on both.
+function shortHome(p, home, platform = process.platform) {
+  const s = String(p || '');
+  const sep = pathFor(platform).sep;
+  return home && s.startsWith(home + sep) ? '~' + s.slice(home.length) : s;
 }
 
 const shellRun = runLoginShell;
@@ -237,7 +282,7 @@ function grokApiKeyPresent(envKeys, env) {
     || nonemptyEnv(env, 'XAI_API_KEY') || nonemptyEnv(env, 'GROK_CODE_XAI_API_KEY');
 }
 
-async function agentStatus(id, { exec = shellRun, readFile = readIfPresent, home = os.homedir(), envKeys = {}, env = process.env } = {}) {
+async function agentStatus(id, { exec = shellRun, readFile = readIfPresent, home = os.homedir(), envKeys = {}, env = process.env, platform = process.platform } = {}) {
   const blank = { id, signedIn: null, label: '', rows: [], source: '' };
   const agent = agentById(id);
   const lc = agent && agent.lifecycle;
@@ -249,7 +294,7 @@ async function agentStatus(id, { exec = shellRun, readFile = readIfPresent, home
     } else if (lc.statusFiles && lc.statusFiles.length) {
       const files = {};
       await Promise.all(lc.statusFiles.map(async (rel) => {
-        const abs = expandHome(rel, home);
+        const abs = expandHome(rel, home, platform);
         files[abs] = await readFile(abs);
       }));
       payload = { files };
@@ -263,4 +308,4 @@ async function agentStatus(id, { exec = shellRun, readFile = readIfPresent, home
   }
 }
 
-module.exports = { KNOWN_AGENTS, POINTER_FILE, contextFilesFor, detectAgents, agentStatus, agentById, expandHome, pathFromShellOutput, findOnDisk };
+module.exports = { KNOWN_AGENTS, POINTER_FILE, contextFilesFor, detectAgents, agentStatus, agentById, expandHome, pathFromShellOutput, findOnDisk, installFor };
