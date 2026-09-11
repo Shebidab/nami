@@ -133,6 +133,7 @@ test('Help carries the docs first and the ask in the middle', () => {
     'Keyboard Shortcuts',
     'Nami on GitHub',
     '★ Star Nami',
+    'This Windows build on GitHub',
     'Report an Issue',
     'Release Notes',
     'Nami for Your Team',
@@ -141,17 +142,32 @@ test('Help carries the docs first and the ask in the middle', () => {
   ]);
 });
 
-// Eight items, seven destinations: the repo is opened by both Nami on GitHub
-// and ★ Star Nami, which is deliberate. One is "read the source", the other is
-// an ask, and GitHub has no separate page for the second.
+// Nine items, eight destinations: the project's repo is opened by both Nami on
+// GitHub and ★ Star Nami, which is deliberate. One is "read the source", the
+// other is an ask, and GitHub has no separate page for the second. The ninth
+// item is this fork, which is a different repository and so a ninth url.
 test('every url the menu opens is https, and only the repo is opened twice', () => {
   const opened = [];
   const template = build({ open: (u) => opened.push(u) });
   for (const item of menuItems(template)) if (item.click) item.click();
-  assert.equal(opened.length, 8, `${opened.length} urls, expected one per link`);
-  assert.equal(new Set(opened).size, 7, 'two items open the same url');
+  assert.equal(opened.length, 9, `${opened.length} urls, expected one per link`);
+  assert.equal(new Set(opened).size, 8, 'two items open the same url');
+  // "Nami on GitHub" and "★ Star Nami" are the pair, and both go upstream
   assert.equal(opened.filter((u) => u === LINKS.repo).length, 2);
   for (const url of opened) assert.match(url, /^https:\/\//, `${url} is not https`);
+});
+
+// This is a fork, and which repository a link means depends on what the link is
+// for. The code somebody is running is this one, so issues and release notes
+// come here. The star is the original project's: its README says the star is
+// the only thing that helps other people find it, and a fork collecting stars
+// for work it did not do would be taking something.
+test('issues come to the fork; the star goes to the project it forked', () => {
+  assert.ok(LINKS.issue.startsWith(LINKS.fork + '/'), LINKS.issue);
+  assert.ok(LINKS.releases.startsWith(LINKS.fork + '/'), LINKS.releases);
+  assert.notEqual(LINKS.repo, LINKS.fork);
+  assert.match(LINKS.repo, /mrdainami/);
+  assert.match(LINKS.fork, /Shebidab/);
 });
 
 // No telemetry anywhere in Nami, so the UTM is the entire measurement story:

@@ -52,8 +52,10 @@ test('an update always wins the slot — a favour never displaces it', () => {
 test('dismissing and clicking through are the same answer', () => {
   const close = src.match(/function closeStarAsk\(\) \{([\s\S]*?)\n\}/)[1];
   assert.match(close, /localStorage\.setItem\(STAR_ASKED, '1'\)/);
-  // the star button must mark it too, or clicking through leaves it due again
-  assert.match(src, /q\('#star-go'.*\{ api\.openUrl\(REPO_URL\); closeStarAsk\(\); \}/);
+  // the star button must mark it too, or clicking through leaves it due again —
+  // and it opens UPSTREAM_URL, because the star belongs to the project this is
+  // a fork of rather than to the fork
+  assert.match(src, /q\('#star-go'.*\{ api\.openUrl\(UPSTREAM_URL\); closeStarAsk\(\); \}/);
 });
 
 test('demo and screenshot runs never count as somebody coming back', () => {

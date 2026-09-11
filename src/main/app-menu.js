@@ -19,7 +19,16 @@
 // (no electron import, so `node --test` can check it), and one thin function
 // that hands the result to Electron.
 
-const REPO = 'https://github.com/mrdainami/nami';
+// This build's own repository, and the project it came from.
+//
+// They are different in a fork, and which one a link should go to depends on
+// what the link is for. Source, issues and release notes belong to the code
+// somebody is actually running — a bug in the Windows port is not Cal's to
+// answer. The star belongs upstream: it is the original project's, the README
+// there says it is the only thing that helps other people find it, and a fork
+// collecting stars for work it did not do would be taking something.
+const REPO = 'https://github.com/Shebidab/nami';
+const UPSTREAM = 'https://github.com/mrdainami/nami';
 const SITE = 'https://nami.dainami.ai';
 
 // Where the app sends people, and how those visits are told apart later.
@@ -33,7 +42,8 @@ const SITE = 'https://nami.dainami.ai';
 // docs and terms are the site's own pages, so they get the same treatment as
 // dainami.ai. releases stays bare with the other GitHub links.
 const LINKS = {
-  repo: REPO,
+  repo: UPSTREAM,
+  fork: REPO,
   issue: `${REPO}/issues/new`,
   releases: `${REPO}/releases`,
   docs: `${SITE}/docs?utm_source=nami-app&utm_medium=help-menu`,
@@ -207,6 +217,7 @@ function buildMenuTemplate({
     SEP,
     link('Nami on GitHub', LINKS.repo),
     link('★ Star Nami', LINKS.repo),
+    link('This Windows build on GitHub', LINKS.fork),
     link('Report an Issue', LINKS.issue),
     link('Release Notes', LINKS.releases),
     SEP,
@@ -261,4 +272,4 @@ function installAppMenu({ Menu, shell, app: electronApp, send, newWindow, theme,
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-module.exports = { buildMenuTemplate, menuItems, menuRoles, installAppMenu, LINKS, COMMANDS, REPO };
+module.exports = { buildMenuTemplate, menuItems, menuRoles, installAppMenu, LINKS, COMMANDS, REPO, UPSTREAM };

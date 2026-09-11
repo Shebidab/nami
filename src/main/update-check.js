@@ -72,7 +72,11 @@ function releaseFromApi(doc, arch = process.arch, platform = process.platform) {
   return { version, url };
 }
 
-const LATEST = 'https://api.github.com/repos/mrdainami/nami/releases/latest';
+// This fork's own releases, which is where its Windows installers are. Pointing
+// at upstream would be worse than pointing nowhere: it answers, with a release
+// that has no .exe in it, so every Windows user would be told they are up to
+// date forever while a newer build sat unreachable in another repository.
+const LATEST = 'https://api.github.com/repos/Shebidab/nami/releases/latest';
 
 async function fetchLatest(url = LATEST) {
   const res = await fetch(url, {

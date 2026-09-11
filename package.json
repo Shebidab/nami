@@ -2,17 +2,17 @@
   "name": "nami",
   "productName": "Nami",
   "version": "0.5.1",
-  "description": "Nami — AI agent workbench, by Dainami AI. Open a folder, run Claude Code and other agents as paper tiles.",
+  "description": "Nami for Windows — a Windows 10/11 port of the Nami AI agent workbench. Open a folder, run Claude Code and other agents as paper tiles.",
   "main": "src/main/main.js",
   "author": "Calvin Hia",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mrdainami/nami.git"
+    "url": "git+https://github.com/Shebidab/nami.git"
   },
-  "homepage": "https://github.com/mrdainami/nami",
+  "homepage": "https://github.com/Shebidab/nami",
   "bugs": {
-    "url": "https://github.com/mrdainami/nami/issues"
+    "url": "https://github.com/Shebidab/nami/issues"
   },
   "scripts": {
     "start": "electron .",

@@ -1,5 +1,10 @@
 # Nami — the paper agent workbench
 
+> This repository is the **Windows port** of
+> [mrdainami/nami](https://github.com/mrdainami/nami). The design below is the
+> original's and is unchanged; what the port added is the second half of "What
+> it is" and the two platform files it names.
+
 Approved design, 2026-08-08. The app now implements it; the screenshots in `docs/media/` are the live article.
 
 ## What it is

@@ -307,7 +307,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            --repo mrdainami/nami \
+            --repo Shebidab/nami \
             --draft \
             --title "Nami ${GITHUB_REF_NAME#v}" \
             --notes "macOS: signed and notarized, Apple Silicon and Intel. Windows 10 and 11: installers for x64 and ARM64." \

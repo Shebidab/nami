@@ -6,7 +6,7 @@ step for the UI — you edit a file and restart.
 ## Run it
 
 ```bash
-git clone https://github.com/mrdainami/nami.git
+git clone https://github.com/Shebidab/nami.git
 cd nami
 npm install
 npm start

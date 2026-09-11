@@ -5998,7 +5998,11 @@ function wireLookPane(modal) {
 // Checking by hand matters beyond reassurance. Dismissing the update bar writes
 // that version off for good (see SKIPPED_UPDATE below), and until now there was
 // no way back to it. Pressing the button clears the mark.
-const REPO_URL = 'https://github.com/mrdainami/nami';
+// This build's repository, and the project it is a fork of. See the same pair
+// in src/main/app-menu.js for why they are not one constant: source, issues
+// and release notes belong to the code being run, the star belongs upstream.
+const REPO_URL = 'https://github.com/Shebidab/nami';
+const UPSTREAM_URL = 'https://github.com/mrdainami/nami';
 // The doc pages the quick start points at. One page per row, so a reader lands
 // on the answer to the row they pressed rather than on a contents page they
 // then have to search. Kept next to REPO_URL so every outward link Nami has is
@@ -6056,7 +6060,7 @@ function aboutPaneHtml() {
       <button class="btn" id="ab-act"${line.busy ? ' disabled' : ''}>${esc(line.act)}</button>
     </div>
     <div class="ab-star">
-      <button class="btn btn--go" data-url="${REPO_URL}">★ Star Nami on GitHub</button>
+      <button class="btn btn--go" data-url="${UPSTREAM_URL}">★ Star Nami on GitHub</button>
     </div>
     <div class="ab-links">
       <a class="ab-link" href="#" data-url="${esc(notes)}">What's new${version ? ' in ' + esc(version) : ''} <span class="arr">↗</span></a>
@@ -6971,7 +6975,7 @@ function paintStarAsk() {
     <span class="un-sep">·</span>
     <button class="un-act un-quiet" id="star-no">no thanks</button>
   </div>`;
-  q('#star-go', els.updateRoot).onclick = () => { api.openUrl(REPO_URL); closeStarAsk(); };
+  q('#star-go', els.updateRoot).onclick = () => { api.openUrl(UPSTREAM_URL); closeStarAsk(); };
   q('#star-no', els.updateRoot).onclick = closeStarAsk;
 }
 
