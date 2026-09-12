@@ -5881,12 +5881,59 @@ function voiceRowBodyHtml(p) {
         Open Nami from the Dock and it will not be there.
         <span class="sv-help go-keys" data-keyenv="${esc(p.keyEnv)}">Save it in Keys</span> to make it stick.</div></div>`;
   }
-  if (p.id === 'local' && !p.ready && p.downloadBytes) {
-    return `<div class="set-opt-body">
-      <button class="btn" id="set-dl">Download the model (${esc(mb(p.downloadBytes))})</button>
-      <div class="setup-note" id="set-dl-note">One time. After this, dictation works with no network and no account.</div></div>`;
-  }
+  if (p.id === 'local') return localVoiceBodyHtml(p);
   return '';
+}
+
+// The on-device engine is the one row with choices of its own: the language it
+// listens for, and which of two models it listens with. Picking a model that is
+// not here yet is what brings up the download button, so there is no separate
+// "get the accurate one" flow to find.
+function localVoiceBodyHtml(p) {
+  const current = p.language || 'auto';
+  const languages = (p.languages || []).slice().sort((a, b) => a[1].localeCompare(b[1]));
+  const options = [['auto', 'Detect automatically'], ...languages.map(([code, name]) => [code, languageLabel(code, name)])]
+    .map(([v, label]) => `<option value="${esc(v)}"${v === current ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  const chips = (p.models || []).map((m) =>
+    `<span class="pick-chip${m.id === p.modelId ? ' picked' : ''}" data-model="${esc(m.id)}">${esc(m.label)} · ${esc(mb(m.bytes))}</span>`).join('');
+  const download = !p.ready && p.downloadBytes
+    ? `<button class="btn" id="set-dl">Download the model (${esc(mb(p.downloadBytes))})</button>
+      <div class="setup-note" id="set-dl-note">One time. After this, dictation works with no network and no account.</div>`
+    : '';
+  return `<div class="set-opt-body">
+      <div class="sv-lab">Language</div>
+      <select class="agent-pick" id="set-lang">${options}</select>
+      ${current === 'auto' ? '<div class="setup-note">Nami hears which language you are speaking, every time. If a short phrase comes out in the wrong one, pick yours here.</div>' : ''}
+      <div class="sv-lab">Model</div>
+      <div class="chip-row" id="set-model">${chips}</div>
+      ${download}</div>`;
+}
+
+// "Russian · русский": the English name the rest of the app is written in, and
+// the name a speaker of that language would look for. The native name comes
+// from the browser's own locale data, so there is no second table to keep in
+// step; a code it does not know (Whisper's "jw") just shows the English name.
+const nativeLanguageNames = new Map();
+function languageLabel(code, name) {
+  if (!nativeLanguageNames.has(code)) {
+    let native = '';
+    try { native = new Intl.DisplayNames([code], { type: 'language' }).of(code) || ''; } catch (_) {}
+    nativeLanguageNames.set(code, native && native !== code && native.toLowerCase() !== name.toLowerCase() ? native : '');
+  }
+  const native = nativeLanguageNames.get(code);
+  return native ? `${name} · ${native}` : name;
+}
+
+// Language and model save the moment they change; there is nothing to confirm.
+// A model that is already downloaded is loaded straight away, so the next
+// dictation is not the one that pays for the switch.
+async function saveVoiceSetting(patch) {
+  const res = await api.settingsSet(patch);
+  if (!res || !res.ok) { toast('Could not save: ' + (res && res.error || '?')); return; }
+  setSttInfo(res.sttInfo);
+  const local = sttProvider('local');
+  if (patch.sttModelId && local && local.ready) api.sttPrepare().catch(() => {});
+  if (isSettingsOpen()) renderOverlay();
 }
 
 // Inputs are read back before any re-render, because the sheet is rebuilt whole.
@@ -5923,6 +5970,11 @@ function wireVoicePane(modal) {
       o.section = 'keys'; o.editKey = el.dataset.keyenv; renderOverlay();
       const i = q('#key-edit-val'); if (i) i.focus();
     };
+  });
+  const lang = q('#set-lang', modal);
+  if (lang) lang.onchange = () => saveVoiceSetting({ sttLanguage: lang.value === 'auto' ? null : lang.value });
+  modal.querySelectorAll('#set-model .pick-chip').forEach((chip) => {
+    chip.onclick = () => { if (!chip.classList.contains('picked')) saveVoiceSetting({ sttModelId: chip.dataset.model }); };
   });
   const dl = q('#set-dl', modal);
   if (dl) dl.onclick = async () => {

@@ -113,7 +113,7 @@ The things that needed real work rather than a table entry:
 | **Terminal** | Agents run in PowerShell over ConPTY, which is why Windows 10 1809 is the floor. Exit codes come back through the same OSC sentinel the Mac build uses, rewritten in a dialect PowerShell has — verified against a live ConPTY. |
 | **PATH** | A Windows process never sees a PATH edit made after it started, so an agent installed inside a tile was unspawnable until restart. Nami reads the registry instead. |
 | **Installing agents** | All seven carry a first-party Windows install command, checked against each vendor's own Windows page. None is WSL wearing a native hat. |
-| **Dictation** | Whisper runs on-device exactly as it does on a Mac — no account, no key, no network. Verified in a packaged build. |
+| **Dictation** | Whisper runs on-device — no account, no key, no network — and, unlike the original, in 99 languages. It hears which one you are speaking each time, or listens for the one you pick in Settings · Voice. The bundled model is multilingual; a more accurate one is a 249 MB download. |
 | **Updates** | NSIS per-user install, differential downloads, one installer per architecture. |
 
 Two things deliberately left as they are, and said out loud rather than hidden:

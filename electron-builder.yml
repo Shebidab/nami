@@ -86,7 +86,7 @@ files:
   # its 21.6 MB ORT wasm, and source maps — none of it reachable from main.
   - '!node_modules/@huggingface/transformers/dist/!(transformers.node.mjs)'
 
-# whisper-tiny.en, so a fresh install transcribes with no network and no
+# whisper-base (multilingual), so a fresh install transcribes with no network and no
 # account. main.js copies this into userData on first launch: the app bundle is
 # read-only, and a later model upgrade has to land somewhere writable.
 # Populated by `npm run fetch-model` (wired to prepack).

@@ -5,7 +5,7 @@ import store from '../src/main/stt-model.js';
 import { abs } from './paths.mjs';
 
 const { MODEL_FILES, ensureModel } = store;
-const REPO = 'onnx-community/whisper-tiny.en';
+const REPO = 'onnx-community/whisper-base';
 import { join, sep } from 'node:path';
 // Where a model file lands, addressed the way stt-model.js addresses it — it
 // joins with path.join, so on Windows the repo id's own slashes become

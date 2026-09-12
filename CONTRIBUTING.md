@@ -85,7 +85,7 @@ Tests say which platform they mean rather than inheriting the one they run on.
 about behaviour instead of punctuation.
 
 Building a `.app` or `.dmg` (`npm run pack` / `npm run dist`) first runs
-`npm run fetch-model`, which pulls `whisper-tiny.en` (~44 MB) into `build/models`
+`npm run fetch-model`, which pulls `whisper-base` (~77 MB, multilingual) into `build/models`
 so the shipped app can transcribe offline. Packaging config lives in
 `electron-builder.yml`.
 

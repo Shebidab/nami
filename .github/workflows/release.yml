@@ -77,7 +77,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      # 44 MB of Whisper weights, gitignored and fetched at pack time. Keyed on
+      # 77 MB of Whisper weights, gitignored and fetched at pack time. Keyed on
       # the fetch script so a model change busts the cache and nothing else does.
       - name: Cache Whisper weights
         uses: actions/cache@v4

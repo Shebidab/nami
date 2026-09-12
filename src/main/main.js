@@ -1022,7 +1022,7 @@ ipcMain.handle('view:set', (_e, view) => REVIEW ? { ok: true } : writeSettings({
 const WRITABLE_SETTINGS = new Set([
   'theme', 'view',
   'sttProvider', 'openaiKey', 'elevenKey', 'openaiModel', 'elevenModel',
-  'sttModelId',
+  'sttModelId', 'sttLanguage',
 ]);
 ipcMain.handle('settings:get', () => {
   const s = readSettings();
@@ -1384,16 +1384,18 @@ function sttEnv() { return { settings: readSettings(), env: process.env }; }
 function sttStatus() { return stt.status(sttEnv()); }
 
 // Whisper weights live in one writable folder under userData. A packaged build
-// ships tiny.en inside the app bundle, which is read-only, so on first launch we
-// copy it across — after that there is a single place that both the engine reads
-// and a bigger model can be downloaded into.
+// ships whisper-base inside the app bundle, which is read-only, so on launch we
+// copy across whatever it ships that is not there yet — after that there is a
+// single place that both the engine reads and a bigger model can be downloaded
+// into. Checked per model on every launch, because an update can ship a new one.
 function sttModelDir() {
   const user = path.join(app.getPath('userData'), 'models');
   const bundled = process.resourcesPath && path.join(process.resourcesPath, 'models');
   try {
-    if (bundled && fs.existsSync(bundled) && !fs.existsSync(path.join(user, 'onnx-community'))) {
-      fs.mkdirSync(user, { recursive: true });
-      fs.cpSync(bundled, user, { recursive: true, force: false, errorOnExist: false });
+    if (bundled && fs.existsSync(bundled)) {
+      for (const repo of require('./stt-model').seedBundled({ from: bundled, to: user })) {
+        console.log('[stt] copied bundled model', repo);
+      }
     }
   } catch (e) { console.error('[stt] could not seed bundled model:', e.message); }
   return user;

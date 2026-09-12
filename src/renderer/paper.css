@@ -2047,6 +2047,10 @@ body[data-platform="win32"] .topbar { padding-right: 150px; }
 .set-opt-body { display: flex; flex-direction: column; gap: 7px;
   margin: 0 0 10px 21px; padding: 9px 0 2px 11px; border-left: 1px dashed var(--dash-dark); }
 .set-opt-body .setup-note { margin: 0; }
+/* Voice -> On this device: language and model. The body is a column, which
+   would stretch a select across the whole sheet. */
+.set-opt-body .agent-pick { align-self: flex-start; max-width: 100%; }
+.set-opt-body .sv-lab { margin: 4px 0 -3px; }
 .modal-foot .btn.rec { color: var(--red-btn); border-color: var(--red-line); background: var(--red-bg); }
 
 /* Settings -> About. Which copy is this, and is it behind?

@@ -158,6 +158,7 @@ function sttConfig(settings = {}, env = {}) {
     openaiModel: settings.openaiModel || '',
     elevenModel: settings.elevenModel || '',
     sttModelId: settings.sttModelId || '',   // which local whisper model
+    sttLanguage: settings.sttLanguage || '', // a Whisper language code, or empty for "detect"
     modelDir: settings.modelDir || '',
   };
 }
@@ -215,6 +216,9 @@ function status({ settings = {}, env = {}, deps } = {}) {
       keySaved: !!(p.needsKey && (shared[p.keyEnv] || settings[p.needsKey])),
       ready: !!s.ready, reason: s.reason || null,
       downloadBytes: s.downloadBytes || 0, modelId: s.modelId || null,
+      // only the local engine has these: which model and language it is set to,
+      // and what else it could be set to
+      models: s.models || null, language: s.language || null, languages: s.languages || null,
     };
   });
   const chosen = settings.sttProvider || null;

@@ -91,6 +91,33 @@ test('status surfaces the local download size when the model is missing', () => 
   assert.equal(s.ready, false);
 });
 
+test('the saved language reaches the local engine, and an unset one arrives empty', async () => {
+  let seen = null;
+  const engine = { ...fakeEngine(), transcribe: async (_clip, cfg) => { seen = cfg.sttLanguage; return 'привет'; } };
+  await transcribe({ clip: clip(), settings: { sttLanguage: 'ru' }, env: {}, deps: { engine } });
+  assert.equal(seen, 'ru');
+  await transcribe({ clip: clip(), settings: {}, env: {}, deps: { engine } });
+  assert.equal(seen, '');
+});
+
+test('status carries the local engine\'s model and language choices to the Voice sheet', () => {
+  const choices = {
+    language: 'auto',
+    languages: [['en', 'English'], ['ru', 'Russian']],
+    models: [{ id: 'base', label: 'Fast', bytes: 77_000_000, bundled: true, ready: true },
+      { id: 'small', label: 'More accurate', bytes: 249_000_000, bundled: false, ready: false }],
+  };
+  const engine = { ...fakeEngine(), status: () => ({ ready: true, modelId: 'base', ...choices }) };
+  const loc = status({ settings: {}, env: {}, deps: { engine } }).providers.find((p) => p.id === 'local');
+  assert.equal(loc.language, 'auto');
+  assert.deepEqual(loc.languages, choices.languages);
+  assert.deepEqual(loc.models.map((m) => m.id), ['base', 'small']);
+  // a cloud provider has none of these, and says so rather than borrowing them
+  const openai = status({ settings: {}, env: {}, deps: { engine } }).providers.find((p) => p.id === 'openai');
+  assert.equal(openai.models, null);
+  assert.equal(openai.language, null);
+});
+
 test('status never throws when a provider status blows up', () => {
   const angry = { status: () => { throw new Error('kaboom'); }, prepare: async () => {}, transcribe: async () => '' };
   const s = status({ settings: {}, env: {}, deps: { engine: angry } });
